@@ -1,10 +1,53 @@
-# this should be good for navigation. I will add description later
+#!/usr/bin/env python3
+"""
+reactive_nav.py -- go from A to B with no pre-planned path.
+
+ALGORITHM
+---------
+Artificial potential fields computed directly from the Multi-ranger's beams,
+with a Bug-style wall-following escape for local minima.
+
+    SEEK    v = attract(goal) + sum(repel(beam) for each beam in range)
+    ESCAPE  entered when progress toward the goal stalls. Rotates the command
+            90 degrees and follows the obstacle boundary until the goal is
+            both visible and closer than it was on entry (Bug2's leave rule).
+
+Repulsion uses the (1/d - 1/d0) form, so it vanishes exactly at the influence
+radius d0 and diverges as d -> 0. Linear falloff does not work: it either
+ignores obstacles until too late or pushes from across the room.
+
+WHAT THIS DOES NOT GUARANTEE
+----------------------------
+Potential fields are not complete. Bug2 alone is provably complete in 2D; this
+hybrid trades that guarantee for smooth motion. It can in principle cycle. The
+simulator exists so you can find those cases on your laptop, not in the air.
+
+SENSING LIMITS THAT SHAPE THE DESIGN
+------------------------------------
+Five VL53L1x beams (front/back/left/right/up), each about 27 degrees wide, out
+to 4 m. That covers roughly 108 degrees of 360 -- the diagonals are blind. Three
+mitigations are built in:
+    * speed cap, so a late detection still leaves braking distance
+    * axis bias, preferring motion along beam directions
+    * slow continuous yaw, sweeping the cones across the blind wedges
+
+The simulated ranger casts multiple rays across each cone's real field of view,
+so it reproduces the blind wedges. A sim with ideal point sensors would tell you
+comforting lies.
+
+USAGE
+-----
+    python3 reactive_nav.py --scenario trap        # watch it stall and escape
+    python3 reactive_nav.py --scenario slalom
+    python3 reactive_nav.py --scenario all --save runs.png
+    python3 reactive_nav.py --fly --goal 2.0 0.0   # needs Flow + Multi-ranger
+"""
+
 from __future__ import annotations
 
 import argparse
 import math
 import sys
-
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -27,7 +70,11 @@ def rot(theta: float) -> np.ndarray:
     c, s = math.cos(theta), math.sin(theta)
     return np.array([[c, -s], [s, c]])
 
-# 1. ALGORITHM
+
+# ----------------------------------------------------------------------------
+# 1. THE ALGORITHM  (no hardware, no simulator -- pure)
+# ----------------------------------------------------------------------------
+
 
 @dataclass
 class Gains:
@@ -48,6 +95,13 @@ class Gains:
 
 
 class ReactiveController:
+    """State machine over potential fields. One instance per flight.
+
+    step() is the whole algorithm. It takes range readings in the BODY frame
+    plus the current world-frame position estimate, and returns a world-frame
+    velocity. Nothing in here knows whether it is driving a simulation or a
+    real Crazyflie.
+    """
 
     SEEK = "seek"
     ESCAPE = "escape"
@@ -65,7 +119,7 @@ class ReactiveController:
         self._normal_filt: np.ndarray | None = None
         self._t = 0.0
 
-# potential field
+    # -- potential field ------------------------------------------------------
 
     def _repulsion(self, ranges: dict, yaw: float) -> np.ndarray:
         """Sum of per-beam repulsive vectors, in the world frame."""
@@ -112,7 +166,7 @@ class ReactiveController:
         n = float(np.linalg.norm(blended))
         return v if n < 1e-9 else blended / n * speed
 
-    # stall detection
+    # -- stall detection ------------------------------------------------------
 
     def _note_progress(self, dist: float) -> bool:
         self._hist.append((self._t, dist))
@@ -143,7 +197,7 @@ class ReactiveController:
                 return False
         return True
 
-    # main entry point
+    # -- main entry point -----------------------------------------------------
 
     def step(self, ranges: dict, pos, yaw: float, dt: float):
         """Returns (v_world (2,), yaw_rate, state)."""
@@ -241,7 +295,10 @@ class ReactiveController:
         return v, yaw_cmd, self.state
 
 
+# ----------------------------------------------------------------------------
 # 2. SIMULATOR
+# ----------------------------------------------------------------------------
+
 
 @dataclass
 class Rect:
@@ -374,13 +431,16 @@ def simulate(world: SimWorld, start, goal, gains: Gains | None = None,
     log["arrived"] = ctrl.state == ReactiveController.ARRIVED
     log["duration"] = t
     log["escape_fraction"] = (
-            sum(1 for s in log["state"] if s == ReactiveController.ESCAPE)
-            / max(len(log["state"]), 1)
+        sum(1 for s in log["state"] if s == ReactiveController.ESCAPE)
+        / max(len(log["state"]), 1)
     )
     return log
 
 
+# ----------------------------------------------------------------------------
 # 3. SCENARIOS
+# ----------------------------------------------------------------------------
+
 
 def scenario_open():
     w = SimWorld([0, 0], [5, 4])
@@ -421,7 +481,10 @@ SCENARIOS = {
 }
 
 
+# ----------------------------------------------------------------------------
 # 4. PLOTTING
+# ----------------------------------------------------------------------------
+
 
 def plot_runs(runs, save=None):
     import matplotlib
@@ -466,8 +529,7 @@ def plot_runs(runs, save=None):
             ax2.fill_between(log["t"], 0, log["dist"].max(), where=esc,
                              color="#e37400", alpha=0.12, step="mid")
         ax2.axhline(0.28, color="#c5221f", ls=":", lw=0.9)
-        ax2.set_xlabel("t [s]");
-        ax2.set_ylabel("[m]")
+        ax2.set_xlabel("t [s]"); ax2.set_ylabel("[m]")
         ax2.grid(alpha=0.25)
         if col == 0:
             ax2.legend(fontsize=8)
@@ -480,7 +542,10 @@ def plot_runs(runs, save=None):
         plt.show()
 
 
+# ----------------------------------------------------------------------------
 # 5. REAL FLIGHT
+# ----------------------------------------------------------------------------
+
 
 def fly(goal_xy, uri: str, height: float = 0.45, gains: Gains | None = None,
         rate_hz: float = 10.0, t_limit: float = 90.0):
@@ -589,7 +654,10 @@ def fly(goal_xy, uri: str, height: float = 0.45, gains: Gains | None = None,
     return 0
 
 
+# ----------------------------------------------------------------------------
 # 6. ENTRY POINT
+# ----------------------------------------------------------------------------
+
 
 def stress(gains: Gains, trials: int = 150, seed: int = 7, t_limit: float = 120.0):
     """Randomized layouts. Four hand-built scenarios prove almost nothing;
@@ -652,7 +720,21 @@ def main(argv=None):
         gains.yaw_rate = 0.0
 
     if args.fly:
+        print("=" * 60)
+        print(" MODE: FLIGHT -- this will connect to a real Crazyflie")
+        print(f"   uri    {args.uri}")
+        print(f"   goal   {args.goal[0]:+.2f}, {args.goal[1]:+.2f} m "
+              f"(displacement from takeoff, not room coordinates)")
+        print(f"   height {args.height:.2f} m")
+        print(" No plot is produced in this mode. If a plot window opens,")
+        print(" you are simulating -- check that --fly was actually passed.")
+        print("=" * 60)
         return fly(args.goal, args.uri, args.height, gains)
+
+    print("=" * 60)
+    print(" MODE: SIMULATION -- no hardware is touched, no radio opened")
+    print(" To fly a real Crazyflie, add:  --fly --uri radio://0/80/2M")
+    print("=" * 60)
 
     if args.stress:
         stress(gains, trials=args.trials)
