@@ -1,0 +1,6 @@
+services:
+  drone-app:
+    build: .
+    # If your application opens a web server/API, map the port here:
+    # ports:
+    #   - "8080:8080" 
