@@ -1,0 +1,773 @@
+{
+  "before_sim": {
+    "fixed": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 11.350000000000026,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 24.25000000000021,
+        "min_clearance": 0.05743637873628668
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 53.699999999999086,
+        "min_clearance": 0.10068705817312681
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 25.950000000000234,
+        "min_clearance": 0.06470866940471451
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 48.599999999999376,
+        "min_clearance": 0.0640086030681227
+      }
+    },
+    "random": {
+      "reached": 131,
+      "collided": 1,
+      "timeout": 18
+    },
+    "failures": [
+      {
+        "trial": 6,
+        "verdict": "timeout",
+        "clearance": 0.11771784225890075
+      },
+      {
+        "trial": 24,
+        "verdict": "timeout",
+        "clearance": 0.10849842525928208
+      },
+      {
+        "trial": 28,
+        "verdict": "timeout",
+        "clearance": 0.1769576261332809
+      },
+      {
+        "trial": 33,
+        "verdict": "timeout",
+        "clearance": 0.018659898217903967
+      },
+      {
+        "trial": 34,
+        "verdict": "timeout",
+        "clearance": 0.08982480142862115
+      },
+      {
+        "trial": 35,
+        "verdict": "timeout",
+        "clearance": 0.06479152619496262
+      },
+      {
+        "trial": 37,
+        "verdict": "timeout",
+        "clearance": 0.06295511769310536
+      },
+      {
+        "trial": 42,
+        "verdict": "collided",
+        "clearance": -0.0007204848147891879
+      },
+      {
+        "trial": 60,
+        "verdict": "timeout",
+        "clearance": 0.13465217244721908
+      },
+      {
+        "trial": 68,
+        "verdict": "timeout",
+        "clearance": 0.06519671980546957
+      },
+      {
+        "trial": 79,
+        "verdict": "timeout",
+        "clearance": 0.12056852764208456
+      },
+      {
+        "trial": 81,
+        "verdict": "timeout",
+        "clearance": 0.05574831798779026
+      },
+      {
+        "trial": 83,
+        "verdict": "timeout",
+        "clearance": 0.0749729741704098
+      },
+      {
+        "trial": 95,
+        "verdict": "timeout",
+        "clearance": 0.17075185687490788
+      },
+      {
+        "trial": 100,
+        "verdict": "timeout",
+        "clearance": 0.08578162479579682
+      },
+      {
+        "trial": 101,
+        "verdict": "timeout",
+        "clearance": 0.06102853524147486
+      },
+      {
+        "trial": 107,
+        "verdict": "timeout",
+        "clearance": 0.16390833083243542
+      },
+      {
+        "trial": 133,
+        "verdict": "timeout",
+        "clearance": 0.08368349620802931
+      },
+      {
+        "trial": 143,
+        "verdict": "timeout",
+        "clearance": 0.06543545249295621
+      }
+    ]
+  },
+  "before_flight": {
+    "fixed": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 16.950000000000106,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.04999999999532,
+        "min_clearance": 0.1312072077692641
+      },
+      "slalom": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.04999999999532,
+        "min_clearance": 0.2613073136204641
+      },
+      "trap": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.04999999999532,
+        "min_clearance": 0.24899004441889525
+      },
+      "pocket": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.04999999999532,
+        "min_clearance": 0.306229501848016
+      }
+    },
+    "random": {
+      "reached": 98,
+      "collided": 0,
+      "timeout": 52
+    },
+    "failures": [
+      {
+        "trial": 0,
+        "verdict": "timeout",
+        "clearance": 0.25053945525144106
+      },
+      {
+        "trial": 1,
+        "verdict": "timeout",
+        "clearance": 0.10495133766152753
+      },
+      {
+        "trial": 6,
+        "verdict": "timeout",
+        "clearance": 0.3834840048398286
+      },
+      {
+        "trial": 8,
+        "verdict": "timeout",
+        "clearance": 0.22961199978520627
+      },
+      {
+        "trial": 10,
+        "verdict": "timeout",
+        "clearance": 0.09209178276905045
+      },
+      {
+        "trial": 13,
+        "verdict": "timeout",
+        "clearance": 0.024587295508251367
+      },
+      {
+        "trial": 20,
+        "verdict": "timeout",
+        "clearance": 0.2210620657093906
+      },
+      {
+        "trial": 21,
+        "verdict": "timeout",
+        "clearance": 0.17566188703135602
+      },
+      {
+        "trial": 22,
+        "verdict": "timeout",
+        "clearance": 0.28430745619167996
+      },
+      {
+        "trial": 23,
+        "verdict": "timeout",
+        "clearance": 0.08635527050947184
+      },
+      {
+        "trial": 24,
+        "verdict": "timeout",
+        "clearance": 0.3439888123569439
+      },
+      {
+        "trial": 27,
+        "verdict": "timeout",
+        "clearance": 0.34327327184062983
+      },
+      {
+        "trial": 28,
+        "verdict": "timeout",
+        "clearance": 0.23761636463835442
+      },
+      {
+        "trial": 30,
+        "verdict": "timeout",
+        "clearance": 0.12683024130823806
+      },
+      {
+        "trial": 33,
+        "verdict": "timeout",
+        "clearance": 0.11546643991475242
+      },
+      {
+        "trial": 34,
+        "verdict": "timeout",
+        "clearance": 0.14300446112473486
+      },
+      {
+        "trial": 35,
+        "verdict": "timeout",
+        "clearance": 0.21156646259876802
+      },
+      {
+        "trial": 37,
+        "verdict": "timeout",
+        "clearance": 0.1679309006223462
+      },
+      {
+        "trial": 39,
+        "verdict": "timeout",
+        "clearance": 0.0985515525044254
+      },
+      {
+        "trial": 46,
+        "verdict": "timeout",
+        "clearance": 0.14440398465903723
+      },
+      {
+        "trial": 58,
+        "verdict": "timeout",
+        "clearance": 0.24035394080449898
+      },
+      {
+        "trial": 60,
+        "verdict": "timeout",
+        "clearance": 0.24941231748442796
+      },
+      {
+        "trial": 65,
+        "verdict": "timeout",
+        "clearance": 0.13560776590228418
+      },
+      {
+        "trial": 67,
+        "verdict": "timeout",
+        "clearance": 0.24898120571789203
+      },
+      {
+        "trial": 68,
+        "verdict": "timeout",
+        "clearance": 0.14346115233834156
+      },
+      {
+        "trial": 71,
+        "verdict": "timeout",
+        "clearance": 0.14889653645261566
+      },
+      {
+        "trial": 79,
+        "verdict": "timeout",
+        "clearance": 0.3017344760846672
+      },
+      {
+        "trial": 80,
+        "verdict": "timeout",
+        "clearance": 0.21252674081424175
+      },
+      {
+        "trial": 81,
+        "verdict": "timeout",
+        "clearance": 0.23303268325580048
+      },
+      {
+        "trial": 83,
+        "verdict": "timeout",
+        "clearance": 0.3258417736364785
+      },
+      {
+        "trial": 85,
+        "verdict": "timeout",
+        "clearance": 0.13885271053594248
+      },
+      {
+        "trial": 86,
+        "verdict": "timeout",
+        "clearance": 0.08716612845174723
+      },
+      {
+        "trial": 89,
+        "verdict": "timeout",
+        "clearance": 0.2610116509844853
+      },
+      {
+        "trial": 95,
+        "verdict": "timeout",
+        "clearance": 0.3168358558086374
+      },
+      {
+        "trial": 100,
+        "verdict": "timeout",
+        "clearance": 0.06005610957108207
+      },
+      {
+        "trial": 101,
+        "verdict": "timeout",
+        "clearance": 0.3797412071552887
+      },
+      {
+        "trial": 104,
+        "verdict": "timeout",
+        "clearance": 0.2019034688714856
+      },
+      {
+        "trial": 105,
+        "verdict": "timeout",
+        "clearance": 0.14982804802811833
+      },
+      {
+        "trial": 107,
+        "verdict": "timeout",
+        "clearance": 0.1617199872512484
+      },
+      {
+        "trial": 116,
+        "verdict": "timeout",
+        "clearance": 0.3369913694090798
+      },
+      {
+        "trial": 117,
+        "verdict": "timeout",
+        "clearance": 0.3175716857001373
+      },
+      {
+        "trial": 120,
+        "verdict": "timeout",
+        "clearance": 0.24516831945603132
+      },
+      {
+        "trial": 121,
+        "verdict": "timeout",
+        "clearance": 0.07402517499366199
+      },
+      {
+        "trial": 129,
+        "verdict": "timeout",
+        "clearance": 0.10894015491847422
+      },
+      {
+        "trial": 130,
+        "verdict": "timeout",
+        "clearance": 0.2491475214051377
+      },
+      {
+        "trial": 133,
+        "verdict": "timeout",
+        "clearance": 0.13412778117914909
+      },
+      {
+        "trial": 135,
+        "verdict": "timeout",
+        "clearance": 0.2082760539391876
+      },
+      {
+        "trial": 136,
+        "verdict": "timeout",
+        "clearance": 0.13586436771058702
+      },
+      {
+        "trial": 138,
+        "verdict": "timeout",
+        "clearance": 0.38047711562551223
+      },
+      {
+        "trial": 142,
+        "verdict": "timeout",
+        "clearance": 0.2807449122878207
+      },
+      {
+        "trial": 143,
+        "verdict": "timeout",
+        "clearance": 0.20138043913498985
+      },
+      {
+        "trial": 147,
+        "verdict": "timeout",
+        "clearance": 0.1438766250432895
+      }
+    ]
+  },
+  "after_sim": {
+    "fixed": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 11.350000000000026,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 23.5500000000002,
+        "min_clearance": 0.04035502005668687
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 57.599999999998865,
+        "min_clearance": 0.17546337326387404
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 23.050000000000193,
+        "min_clearance": 0.16236777146741396
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 45.799999999999535,
+        "min_clearance": 0.06234604806222563
+      }
+    },
+    "random": {
+      "reached": 142,
+      "collided": 2,
+      "timeout": 6
+    },
+    "failures": [
+      {
+        "trial": 6,
+        "verdict": "timeout",
+        "clearance": 0.09483586398149108
+      },
+      {
+        "trial": 28,
+        "verdict": "collided",
+        "clearance": -0.005632127655831973
+      },
+      {
+        "trial": 34,
+        "verdict": "timeout",
+        "clearance": 0.0977491302228587
+      },
+      {
+        "trial": 35,
+        "verdict": "timeout",
+        "clearance": 0.12495982562183872
+      },
+      {
+        "trial": 54,
+        "verdict": "collided",
+        "clearance": -0.000551434129209577
+      },
+      {
+        "trial": 81,
+        "verdict": "timeout",
+        "clearance": 0.06023166313523884
+      },
+      {
+        "trial": 86,
+        "verdict": "timeout",
+        "clearance": 0.06384085899845338
+      },
+      {
+        "trial": 107,
+        "verdict": "timeout",
+        "clearance": 0.09534846625153531
+      }
+    ]
+  },
+  "after_flight": {
+    "fixed": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 16.950000000000106,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 43.849999999999646,
+        "min_clearance": 0.023608131943176625
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 66.94999999999834,
+        "min_clearance": 0.2824212561910827
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 45.89999999999953,
+        "min_clearance": 0.07064558582863811
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 29.500000000000284,
+        "min_clearance": 0.11067922280495196
+      }
+    },
+    "random": {
+      "reached": 129,
+      "collided": 0,
+      "timeout": 21
+    },
+    "failures": [
+      {
+        "trial": 1,
+        "verdict": "timeout",
+        "clearance": 0.10495133766152753
+      },
+      {
+        "trial": 6,
+        "verdict": "timeout",
+        "clearance": 0.060567130625244936
+      },
+      {
+        "trial": 23,
+        "verdict": "timeout",
+        "clearance": 0.09818690235716074
+      },
+      {
+        "trial": 24,
+        "verdict": "timeout",
+        "clearance": 0.13391396578050255
+      },
+      {
+        "trial": 27,
+        "verdict": "timeout",
+        "clearance": 0.060390096057162
+      },
+      {
+        "trial": 28,
+        "verdict": "timeout",
+        "clearance": 0.0624038955153772
+      },
+      {
+        "trial": 33,
+        "verdict": "timeout",
+        "clearance": 0.16856553197811922
+      },
+      {
+        "trial": 35,
+        "verdict": "timeout",
+        "clearance": 0.0030530892699634077
+      },
+      {
+        "trial": 39,
+        "verdict": "timeout",
+        "clearance": 0.04804609732579465
+      },
+      {
+        "trial": 42,
+        "verdict": "timeout",
+        "clearance": 0.11581609201636381
+      },
+      {
+        "trial": 65,
+        "verdict": "timeout",
+        "clearance": 0.17484737396865066
+      },
+      {
+        "trial": 72,
+        "verdict": "timeout",
+        "clearance": 0.1808069705098522
+      },
+      {
+        "trial": 81,
+        "verdict": "timeout",
+        "clearance": 0.17069098158921367
+      },
+      {
+        "trial": 99,
+        "verdict": "timeout",
+        "clearance": 0.1743729836417439
+      },
+      {
+        "trial": 100,
+        "verdict": "timeout",
+        "clearance": 0.06005610957108207
+      },
+      {
+        "trial": 101,
+        "verdict": "timeout",
+        "clearance": 0.18978740648235412
+      },
+      {
+        "trial": 104,
+        "verdict": "timeout",
+        "clearance": 0.1716219933677999
+      },
+      {
+        "trial": 107,
+        "verdict": "timeout",
+        "clearance": 0.16109382455469787
+      },
+      {
+        "trial": 113,
+        "verdict": "timeout",
+        "clearance": 0.1866296365771811
+      },
+      {
+        "trial": 120,
+        "verdict": "timeout",
+        "clearance": 0.05782511075811744
+      },
+      {
+        "trial": 147,
+        "verdict": "timeout",
+        "clearance": 0.1438766250432895
+      }
+    ]
+  },
+  "sensitivity": {
+    "delay=0,tau=0.25": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 16.866666666666628,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.06666666666497,
+        "min_clearance": 0.08078215242437811
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 69.60000000000117,
+        "min_clearance": 0.0947250251357154
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 31.999999999999908,
+        "min_clearance": 0.06508727642334244
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 29.93333333333325,
+        "min_clearance": 0.09610172361887653
+      }
+    },
+    "delay=0.1,tau=0.5": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 16.599999999999962,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.06666666666497,
+        "min_clearance": 0.08084564162332855
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 68.6666666666679,
+        "min_clearance": 0.1263610168560744
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 33.39999999999998,
+        "min_clearance": 0.05216580053041772
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 61.73333333333472,
+        "min_clearance": 0.0969097793542095
+      }
+    },
+    "delay=0.2,tau=0.75": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 16.333333333333297,
+        "min_clearance": 0.51
+      },
+      "wall": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.06666666666497,
+        "min_clearance": 0.011909234722637357
+      },
+      "slalom": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.06666666666497,
+        "min_clearance": 0.2723846175364587
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 35.00000000000006,
+        "min_clearance": 0.04445251040446874
+      },
+      "pocket": {
+        "arrived": false,
+        "collided": false,
+        "duration": 120.06666666666497,
+        "min_clearance": 0.0748707602023869
+      }
+    }
+  },
+  "metadata": {
+    "trials": 150,
+    "seed": 7,
+    "dt": 0.05,
+    "tau": 0.25,
+    "radius": 0.09,
+    "time_limit": 120,
+    "baseline_git_blob": "e69c4db9b5b07e63144f0eb969e2649b741fe928"
+  }
+}
