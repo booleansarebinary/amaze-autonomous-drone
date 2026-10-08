@@ -46,10 +46,12 @@ USAGE
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -771,6 +773,45 @@ def plot_runs(runs, save=None):
 # ----------------------------------------------------------------------------
 
 
+class TelemetryJsonWriter:
+    """Persist the two initial dashboard metrics as valid JSON time series."""
+
+    METRICS = {
+        "kalman_state_x": "kalman.stateX",
+        "kalman_state_y": "kalman.stateY",
+    }
+
+    def __init__(self, directory: Path | str):
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.samples = {name: [] for name in self.METRICS}
+        self.enabled = True
+        self._write_all()
+
+    def record(self, timestamp_ms: int, x: float, y: float):
+        """Add one position sample using UTC epoch milliseconds."""
+        if not self.enabled:
+            return
+        self.samples["kalman_state_x"].append(
+            {"timestamp": int(timestamp_ms), "value": float(x)})
+        self.samples["kalman_state_y"].append(
+            {"timestamp": int(timestamp_ms), "value": float(y)})
+        try:
+            self._write_all()
+        except OSError as exc:
+            # Telemetry export must not interrupt or destabilize a flight.
+            self.enabled = False
+            print(f"Telemetry JSON export disabled: {exc}", file=sys.stderr)
+
+    def _write_all(self):
+        for name, samples in self.samples.items():
+            output = self.directory / f"{name}.json"
+            temporary = output.with_suffix(".tmp")
+            temporary.write_text(json.dumps(samples, separators=(",", ":")) + "\n",
+                                 encoding="utf-8")
+            temporary.replace(output)
+
+
 def wrap_pi(a: float) -> float:
     """Wrap an angle to [-pi, pi]."""
     return math.atan2(math.sin(a), math.cos(a))
@@ -818,6 +859,7 @@ def fly(goal_xy, uri: str, height: float = 0.45, gains: Gains | None = None,
 
         # Track the Flow deck's dead-reckoned position so the controller knows
         # how far it has come. This drifts; keep flights short.
+        telemetry = TelemetryJsonWriter("telemetry")
         est = {"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0, "yaw": 0.0}
         lg = LogConfig(name="kalman", period_in_ms=50)
         lg.add_variable("kalman.stateX", "float")
@@ -832,6 +874,7 @@ def fly(goal_xy, uri: str, height: float = 0.45, gains: Gains | None = None,
             est["vx"] = data["kalman.statePX"]
             est["vy"] = data["kalman.statePY"]
             est["yaw"] = math.radians(data["stabilizer.yaw"])
+            telemetry.record(int(time.time() * 1000), est["x"], est["y"])
 
         scf.cf.log.add_config(lg)
         lg.data_received_cb.add_callback(_on_data)

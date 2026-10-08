@@ -1,5 +1,8 @@
 """Simulation regressions; no radio or hardware access."""
 import math
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 import numpy as np
@@ -49,6 +52,20 @@ class GeometryTests(unittest.TestCase):
         for kwargs in ({'dt': 0}, {'tau': -1}, {'t_limit': 0}, {'sensor_delay': -1}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 nav.simulate(world, [1, 1], [3, 3], **kwargs)
+
+
+class TelemetryJsonTests(unittest.TestCase):
+    def test_writer_creates_timestamped_x_and_y_time_series(self):
+        with TemporaryDirectory() as temporary:
+            writer = nav.TelemetryJsonWriter(temporary)
+            writer.record(1_700_000_000_123, 1.25, -0.5)
+
+            directory = Path(temporary)
+            x = json.loads((directory / "kalman_state_x.json").read_text())
+            y = json.loads((directory / "kalman_state_y.json").read_text())
+
+        self.assertEqual(x, [{"timestamp": 1_700_000_000_123, "value": 1.25}])
+        self.assertEqual(y, [{"timestamp": 1_700_000_000_123, "value": -0.5}])
 
 
 class NavigationTests(unittest.TestCase):
