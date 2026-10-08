@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Navigation Algorithm" />
+    <list default="true" id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Navigation Algorithm">
+      <change afterPath="$PROJECT_DIR$/algorithms/cache/orbit_prototype.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/algorithms/test_orbit_prototype.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -26,23 +30,23 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.8671430542527212" />
-      <entry key="MS500" value="4.521543031495463" />
-      <entry key="S2" value="6.206652245715784" />
-      <entry key="S5" value="6.984606995983743" />
-      <entry key="S10" value="11.390583678432767" />
-      <entry key="S30" value="36.30945212426241" />
-      <entry key="S60" value="54.38629623815187" />
-      <entry key="M2" value="67.3644473229656" />
-      <entry key="M5" value="76.84503514545668" />
-      <entry key="M10" value="80.33328023051722" />
-      <entry key="M15" value="81.53523689935942" />
-      <entry key="M30" value="82.75736115612438" />
-      <entry key="H1" value="83.37613013036179" />
-      <entry key="H2" value="83.8392062688795" />
-      <entry key="H4" value="93.87764062806907" />
-      <entry key="D1" value="445.66583839141356" />
-      <entry key="W1" value="774.922673223885" />
+      <entry key="MS100" value="1.7163439950370027" />
+      <entry key="MS500" value="4.018021236072936" />
+      <entry key="S2" value="5.376443786019648" />
+      <entry key="S5" value="5.737868202966733" />
+      <entry key="S10" value="5.866706126812321" />
+      <entry key="S30" value="5.955062947505372" />
+      <entry key="S60" value="5.9774675749569735" />
+      <entry key="M2" value="5.988717761402257" />
+      <entry key="M5" value="5.995483251705993" />
+      <entry key="M10" value="5.997740983159946" />
+      <entry key="M15" value="5.998493845911806" />
+      <entry key="M30" value="5.999246867271709" />
+      <entry key="H1" value="6.002740615617431" />
+      <entry key="H2" value="7.433133886256052" />
+      <entry key="H4" value="37.441284165574274" />
+      <entry key="D1" value="620.5165516357952" />
+      <entry key="W1" value="1276.2678028945923" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -51,36 +55,36 @@
       <entry key="S5" value="0.0" />
       <entry key="S10" value="0.0" />
       <entry key="S30" value="0.0" />
-      <entry key="S60" value="0.0" />
-      <entry key="M2" value="0.0" />
-      <entry key="M5" value="4.713785590588619E-149" />
-      <entry key="M10" value="6.865701413976964E-75" />
-      <entry key="M15" value="3.6123509905998017E-50" />
-      <entry key="M30" value="1.900618581041368E-25" />
-      <entry key="H1" value="4.3596084469151357E-13" />
-      <entry key="H2" value="6.602733106006206E-7" />
-      <entry key="H4" value="8.125720340995192E-4" />
-      <entry key="D1" value="0.30547591797107987" />
-      <entry key="W1" value="0.8441609973792438" />
+      <entry key="S60" value="1.14E-322" />
+      <entry key="M2" value="1.403548666960592E-161" />
+      <entry key="M5" value="6.777653017781621E-65" />
+      <entry key="M10" value="1.160378650470737E-32" />
+      <entry key="M15" value="6.452847357241725E-22" />
+      <entry key="M30" value="3.5911033452160346E-11" />
+      <entry key="H1" value="8.473995426689026E-6" />
+      <entry key="H2" value="0.004116698108862958" />
+      <entry key="H4" value="0.09076708212694119" />
+      <entry key="D1" value="1.370256272058356" />
+      <entry key="W1" value="2.6381263408842712" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.7731491971865565" />
-      <entry key="MS500" value="4.463587183349016" />
-      <entry key="S2" value="6.186393672291423" />
-      <entry key="S5" value="6.975646502998172" />
-      <entry key="S10" value="11.384249812227596" />
-      <entry key="S30" value="36.30367308613166" />
-      <entry key="S60" value="54.38202544054944" />
-      <entry key="M2" value="67.36180812878352" />
-      <entry key="M5" value="76.84383092322152" />
-      <entry key="M10" value="80.33265066635367" />
-      <entry key="M15" value="81.53481087368927" />
-      <entry key="M30" value="82.75714492966159" />
-      <entry key="H1" value="83.37602120312415" />
-      <entry key="H2" value="83.83915218113255" />
-      <entry key="H4" value="93.87842258895664" />
-      <entry key="D1" value="445.97126088516245" />
-      <entry key="W1" value="775.7668163374675" />
+      <entry key="MS100" value="1.5782126293705074" />
+      <entry key="MS500" value="3.932422117224466" />
+      <entry key="S2" value="5.348635767788593" />
+      <entry key="S5" value="5.726115133411284" />
+      <entry key="S10" value="5.860719388228932" />
+      <entry key="S30" value="5.953042370263527" />
+      <entry key="S60" value="5.976454129255899" />
+      <entry key="M2" value="5.988210246830671" />
+      <entry key="M5" value="5.99528005554958" />
+      <entry key="M10" value="5.997639353334175" />
+      <entry key="M15" value="5.998426085637665" />
+      <entry key="M30" value="5.999212983641528" />
+      <entry key="H1" value="6.002732141091136" />
+      <entry key="H2" value="7.437240715181559" />
+      <entry key="H4" value="37.53203146010626" />
+      <entry key="D1" value="621.8867450200356" />
+      <entry key="W1" value="1278.9059056313722" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -94,6 +98,7 @@
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
     &quot;Python.hop.executor&quot;: &quot;Run&quot;,
+    &quot;Python.orbit_prototype.executor&quot;: &quot;Run&quot;,
     &quot;Python.reactive_nav.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
@@ -207,16 +212,5 @@
     <MESSAGE value="Testing PyCharm UI push" />
     <MESSAGE value="Navigation Algorithm" />
     <option name="LAST_COMMIT_MESSAGE" value="Navigation Algorithm" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/algorithms/reactive_nav.py</url>
-          <line>1080</line>
-          <option name="timeStamp" value="14" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>
