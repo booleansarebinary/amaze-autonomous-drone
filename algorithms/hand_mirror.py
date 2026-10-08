@@ -24,9 +24,6 @@ from cflib.utils.multiranger import Multiranger
 
 URI = 'radio://0/80/2M'
 
-if len(sys.argv) > 1:
-    URI = sys.argv[1]
-
 logging.basicConfig(level=logging.ERROR)
 
 # --- Tuning knobs ---
@@ -35,7 +32,9 @@ DEADBAND = 0.05         # (m) ignore error smaller than this, to reduce jitter
 KP = 1.5                # proportional gain: velocity = KP * error
 MAX_VELOCITY = 0.6      # (m/s) clamp so it doesn't lurch
 LOOP_DT = 0.05          # (s) ~20 Hz control loop
-
+MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
+MAX_DETECT_DISTANCE = 1.2   # (m) further than this is a wall, not a hand
+MIN_HEIGHT = 0.2            # (m) never command a descent below this height
 
 def proportional_velocity(measured, sign=1.0):
     """
@@ -44,8 +43,8 @@ def proportional_velocity(measured, sign=1.0):
     sign flips which physical direction counts as "closing the gap"
     for that particular sensor's mounting orientation.
     """
-    if measured is None:
-        return 0.0  # nothing detected on this axis, don't move on it
+    if measured is None or not (MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE):
+        return 0.0  # nothing that could be a hand on this axis, don't move on it
 
     error = measured - TARGET_DISTANCE
     if abs(error) < DEADBAND:
@@ -55,11 +54,36 @@ def proportional_velocity(measured, sign=1.0):
     return max(-MAX_VELOCITY, min(MAX_VELOCITY, velocity))
 
 
-if __name__ == '__main__':
+def compute_velocities(front, left, up, height=None):
+    """One control tick: three ranger readings in, a body-frame velocity out.
+
+    x-axis: the front sensor reads "how far is my hand in front of me", and
+            positive x is forward, so a growing front distance means move
+            forward.
+    y-axis: the left sensor, and positive y is left in the body frame.
+    z-axis: the up sensor; a growing distance above means the hand moved up,
+            so follow it upward.
+
+    height (optional) is the down-ranger reading; below MIN_HEIGHT any
+    downward command is dropped so a hand overhead can't push the drone
+    into the floor.
+    """
+    vx = proportional_velocity(front, sign=1.0)
+    vy = proportional_velocity(left, sign=1.0)
+    vz = proportional_velocity(up, sign=1.0)
+    if height is not None and height <= MIN_HEIGHT and vz < 0:
+        vz = 0.0
+    return vx, vy, vz
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    uri = argv[0] if argv else URI
+
     cflib.crtp.init_drivers(enable_debug_driver=False)
 
     cf = Crazyflie(rw_cache='./cache')
-    with SyncCrazyflie(URI, cf=cf) as scf:
+    with SyncCrazyflie(uri, cf=cf) as scf:
         scf.cf.platform.send_arming_request(True)
         time.sleep(1.0)
 
@@ -67,19 +91,12 @@ if __name__ == '__main__':
             with Multiranger(scf) as multi_ranger:
                 try:
                     while True:
-                        # x-axis: front sensor reads "how far is my hand in
-                        # front of me" -> positive x is forward, so a
-                        # growing front-distance should mean move forward.
-                        vx = proportional_velocity(multi_ranger.front, sign=1.0)
-
-                        # y-axis: left sensor -> positive y is left in the
-                        # Crazyflie body frame.
-                        vy = proportional_velocity(multi_ranger.left, sign=1.0)
-
-                        # z-axis: up sensor -> growing distance above means
-                        # your hand moved further up, so follow upward.
-                        vz = proportional_velocity(multi_ranger.up, sign=1.0)
-
+                        vx, vy, vz = compute_velocities(
+                            multi_ranger.front,
+                            multi_ranger.left,
+                            multi_ranger.up,
+                            multi_ranger.down,
+                        )
                         motion_commander.start_linear_motion(vx, vy, vz)
                         time.sleep(LOOP_DT)
 
@@ -87,3 +104,8 @@ if __name__ == '__main__':
                     print('Landing...')
 
         print('Demo terminated!')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
