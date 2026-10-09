@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Crazyflie Telemetry</title>
+  <script src="../../eclair/openmct/dist/openmct.js"></script>
+<script src="dronePlugin.js"></script>
+</head>
+<body>
+  <script>
+    openmct.setAssetPath('../../eclair/openmct/dist');
+    openmct.install(openmct.plugins.LocalStorage());
+    openmct.install(openmct.plugins.MyItems());
+    openmct.install(openmct.plugins.UTCTimeSystem());
+    openmct.install(openmct.plugins.Espresso());
+    openmct.install(DronePlugin());
+    openmct.time.clock('local', { start: -60 * 1000, end: 0 });
+    openmct.time.timeSystem('utc');
+    openmct.start();
+  </script>
+</body>
+</html>
