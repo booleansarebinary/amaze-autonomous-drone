@@ -2,30 +2,54 @@
 <html>
 <head>
     <title>Open MCT Tutorials</title>
-    <script src="node_modules/openmct/dist/openmct.js"></script>
-    <script src="lib/http.js"></script>
-    <script src="dictionary-plugin.js"></script>
-    <!-- <script src="historical-telemetry-plugin.js"></script>
-    <script src="realtime-telemetry-plugin.js"></script> -->
+    <style>
+        #startup-error { display: none; margin: 2rem; padding: 1rem; color: #fff; background: #8b1e1e; font: 16px/1.4 monospace; white-space: pre-wrap; }
+    </style>
     <script>
-        openmct.setAssetPath('node_modules/openmct/dist');
-        openmct.install(openmct.plugins.LocalStorage());
-        openmct.install(openmct.plugins.MyItems());
-        openmct.install(openmct.plugins.UTCTimeSystem());
-        openmct.time.setClock('local');
-        openmct.time.setClockOffsets({start: -15 * 60 * 1000, end: 0});
-        openmct.time.setTimeSystem('utc');
-        openmct.install(openmct.plugins.Espresso());
-
-        openmct.install(DictionaryPlugin());
-        // openmct.install(HistoricalTelemetryPlugin());
-        // openmct.install(RealtimeTelemetryPlugin());
-        document.addEventListener('DOMContentLoaded', () => {
-            openmct.start();
-        });
+        function showStartupError(error) {
+            var target = document.getElementById('startup-error');
+            if (target) {
+                target.style.display = 'block';
+                target.textContent = 'OpenMCT could not start:\n' + (error && (error.stack || error.message) || error);
+            }
+        }
+        window.addEventListener('error', function (event) { showStartupError(event.error || event.message); });
+        window.addEventListener('unhandledrejection', function (event) { showStartupError(event.reason); });
+    </script>
+    <script src="openmct-loader.js"></script>
+    <script src="dictionary-plugin.js"></script>
+    <script src="realtime-telemetry-plugin.js"></script>
+    <script>
+        window.openmctReady.then(function (mct) {
+            try {
+                mct.setAssetPath('../openmct-tutorial/node_modules/openmct/dist');
+                mct.install(mct.plugins.LocalStorage());
+                mct.install(mct.plugins.MyItems());
+                mct.install(mct.plugins.UTCTimeSystem());
+                mct.time.setClock('local');
+                // A short live window makes a new flight's trace visible
+                // immediately instead of compressing a few seconds of data
+                // into a fifteen-minute chart.
+                mct.time.setClockOffsets({start: -60 * 1000, end: 0});
+                mct.time.setTimeSystem('utc');
+                mct.install(mct.plugins.Conductor({menuOptions: [
+                    {name: 'Realtime', timeSystem: 'utc', clock: 'local',
+                     clockOffsets: {start: -60000, end: 0}},
+                    {name: 'Fixed', timeSystem: 'utc',
+                     bounds: {start: Date.now() - 60000, end: Date.now()}}
+                ]}));
+                mct.install(mct.plugins.Espresso());
+                mct.install(DictionaryPlugin());
+                mct.install(RealtimeTelemetryPlugin());
+                mct.start();
+            } catch (error) {
+                showStartupError(error);
+            }
+        }).catch(showStartupError);
     </script>
 </head>
 <body>
+    <pre id="startup-error"></pre>
     <div id="app"></div>
 </body>
 </html>

@@ -1,0 +1,22 @@
+name: amaze-telemetry-demo
+services:
+  bridge:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile.demo
+    image: amaze-telemetry-demo:local
+    command: ["python", "dashboard/dataTest.py", "--json-dir", "/telemetry", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:${TELEMETRY_PORT:-8765}:8765"
+    volumes:
+      - type: bind
+        source: ${TELEMETRY_DIR:-./telemetry}
+        target: /telemetry
+        read_only: true
+        bind:
+          create_host_path: false
+  dashboard:
+    image: amaze-telemetry-demo:local
+    command: ["python", "-m", "http.server", "8000", "--bind", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8000}:8000"

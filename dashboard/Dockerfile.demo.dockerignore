@@ -1,0 +1,10 @@
+**
+!dashboard/
+!dashboard/Dockerfile.demo
+!dashboard/index.html
+!dashboard/*.js
+!dashboard/dataTest.py
+!openmct-tutorial/
+!openmct-tutorial/package.json
+!openmct-tutorial/package-lock.json
+!index.html
