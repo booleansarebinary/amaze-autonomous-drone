@@ -49,6 +49,7 @@ import argparse
 import json
 import math
 import sys
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -783,14 +784,30 @@ class TelemetryJsonWriter:
 
     def __init__(self, directory: Path | str):
         self.directory = Path(directory)
-        self.directory.mkdir(parents=True, exist_ok=True)
         self.samples = {name: [] for name in self.METRICS}
         self.enabled = True
-        self._write_all()
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            self._write_all()
+        except OSError as exc:
+            self.enabled = False
+            print(f"Telemetry JSON export disabled: {exc}", file=sys.stderr)
 
     def record(self, timestamp_ms: int, x: float, y: float):
         """Add one position sample using UTC epoch milliseconds."""
         if not self.enabled:
+            return
+        # Reject the whole pair before changing either series. JSON cannot
+        # represent NaN/Infinity, and export errors must not escape a callback.
+        try:
+            if isinstance(timestamp_ms, bool) or not 0 <= timestamp_ms <= 8_640_000_000_000_000:
+                return
+            if int(timestamp_ms) != timestamp_ms or isinstance(x, bool) or isinstance(y, bool):
+                return
+            x, y = float(x), float(y)
+            if not math.isfinite(x) or not math.isfinite(y):
+                return
+        except (TypeError, ValueError, OverflowError):
             return
         self.samples["kalman_state_x"].append(
             {"timestamp": int(timestamp_ms), "value": float(x)})
@@ -807,9 +824,18 @@ class TelemetryJsonWriter:
         for name, samples in self.samples.items():
             output = self.directory / f"{name}.json"
             temporary = output.with_suffix(".tmp")
-            temporary.write_text(json.dumps(samples, separators=(",", ":")) + "\n",
+            temporary.write_text(json.dumps(samples, separators=(",", ":"), allow_nan=False) + "\n",
                                  encoding="utf-8")
-            temporary.replace(output)
+            # On Windows an overlapping reader can temporarily deny rename.
+            # Bound retry sleeps to 40 ms total per file; never wait indefinitely.
+            for attempt in range(5):
+                try:
+                    temporary.replace(output)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.01)
 
 
 def wrap_pi(a: float) -> float:
