@@ -21,7 +21,7 @@ from algorithms.reactive_nav import TelemetryJsonWriter
 
 
 def main():
-    dashboard = Path(os.environ.get('DASHBOARD_ROOT', ROOT.parent / 'amaze-dashboard'))
+    dashboard = Path(os.environ.get('DASHBOARD_ROOT', ROOT))
     docker = os.environ.get('TELEMETRY_E2E_DOCKER') == '1'
     server = ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(
         SimpleHTTPRequestHandler, directory=str(dashboard)))

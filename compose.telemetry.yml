@@ -10,7 +10,7 @@ services:
       - "127.0.0.1:${TELEMETRY_PORT:-8765}:8765"
     volumes:
       - type: bind
-        source: ${TELEMETRY_DIR:-../amaze-test-flight/telemetry}
+        source: ${TELEMETRY_DIR:-./telemetry}
         target: /telemetry
         read_only: true
         bind:

@@ -6,7 +6,7 @@ const os = require('node:os');
 const {spawn} = require('node:child_process');
 const readline = require('node:readline');
 const root = path.resolve(__dirname, '..');
-const dashboard = process.env.DASHBOARD_ROOT || path.resolve(root, '../amaze-dashboard');
+const dashboard = process.env.DASHBOARD_ROOT || root;
 const {chromium} = require(path.join(dashboard, 'openmct-tutorial/node_modules/playwright-core'));
 
 (async () => {

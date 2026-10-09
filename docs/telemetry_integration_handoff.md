@@ -12,14 +12,14 @@ This is a working two-metric demonstration and a starting point for a shared int
 
 ## Where the work lives
 
-There are two local working folders, each on a different branch:
+The integration is now collected on one branch, `telemetry-integration-combined`,
+so a teammate can run the workflow from one checkout:
 
 | Folder on the development laptop | Branch | Purpose |
 | --- | --- | --- |
-| `C:\Users\victo\amaze-test-flight` | `test_drone_flight` | Flight program, JSON writer, and integration tests |
-| `C:\Users\victo\amaze-dashboard` | `victor/telemetry-dashboard-demo` | Demo bridge, OpenMCT integration, and Docker launch files |
+| One checkout (for example, `C:\Users\YOUR_USERNAME\amaze-autonomous-drone`) | `telemetry-integration-combined` | Flight program, JSON writer, bridge, OpenMCT integration, Docker launch files, and integration tests |
 
-At the time of this handoff, the original JSON export is in flight commit `80561d1`, while the later writer fixes, new integration tests, and dashboard demo changes include uncommitted files. **Checking out a branch name alone will not retrieve uncommitted work.** Before someone tests on another computer, the maintainer needs to review, commit, and share both sets of changes, or provide complete copies of these working folders. No team branch was merged or pushed as part of this handoff.
+The combined branch brings the flight and dashboard pieces together. Teammates should use this branch rather than switching between the earlier separate working copies. Any edits made after the branch was shared still need to be committed and pushed before other people can receive them.
 
 The following comparison describes the original committed dashboard files in the local demo checkout. It is not a claim that every dashboard branch, including `oliviawu`, has the same gaps.
 
@@ -45,14 +45,12 @@ The demo uses OpenMCT's existing plotting tools. It does not replace OpenMCT wit
 
 ### Main changed and added files
 
-In the flight folder:
+All paths below are relative to the root of the combined repository:
 
 - `algorithms/reactive_nav.py`: contains the X/Y JSON exporter and its validation, file-error handling, and bounded Windows rename retries. The later integration fixes did not change the navigation movement logic.
 - `dev_scripts/test_telemetry_integration.py`: tests the writer, file bridge, and WebSocket transport.
 - `dev_scripts/test_telemetry_plugin.cjs`: tests the frontend telemetry provider.
 - `dev_scripts/telemetry_e2e_fixture.py` and `dev_scripts/test_telemetry_browser.cjs`: run isolated browser tests with temporary files and optional Docker containers.
-
-In the dashboard folder:
 
 - `dashboard/dataTest.py`: implements the demo bridge and its file, fake-data, and standalone radio modes.
 - `dashboard/dictionary-plugin.js`: defines the two measurements OpenMCT can display.
@@ -153,32 +151,23 @@ These commands are for **Git Bash on Windows**. Open Git Bash from the Start men
 
 ### Get the complete code into the expected folders
 
-Obtain the reviewed flight and dashboard changes described above. These instructions assume two sibling folders in your Windows user directory:
+Clone the combined branch once. These instructions assume the checkout is in your Windows user directory:
 
 ```text
-C:\Users\YOUR_USERNAME\amaze-test-flight
-C:\Users\YOUR_USERNAME\amaze-dashboard
+C:\Users\YOUR_USERNAME\amaze-autonomous-drone
 ```
 
 In Git Bash, `~` means your user directory. Check the folders and branches:
 
 ```bash
-cd ~/amaze-test-flight
+git clone --branch telemetry-integration-combined https://github.com/booleansarebinary/amaze-autonomous-drone.git
+cd ~/amaze-autonomous-drone
 pwd
 git branch --show-current
 git status --short
 ```
 
-The expected flight branch is `test_drone_flight`. In another Git Bash window:
-
-```bash
-cd ~/amaze-dashboard
-pwd
-git branch --show-current
-git status --short
-```
-
-The expected demo branch is `victor/telemetry-dashboard-demo`. Do not switch branches over unfinished local work just to match these names. Ask the maintainer for the reviewed version if the files or branches are missing. `fatal: not a git repository` usually means you are still in your home folder rather than inside a checkout; `pwd` tells you where you are.
+The expected branch is `telemetry-integration-combined`. If you already have this branch checked out, just use `cd ~/amaze-autonomous-drone`. `fatal: not a git repository` usually means you are still in your home folder rather than inside a checkout; `pwd` tells you where you are.
 
 ### Install the software and prepare the drone connection
 
@@ -190,10 +179,10 @@ Close other programs connected to the same Crazyradio before flight, including a
 
 ### Prepare the flight Python environment
 
-From the flight folder, check Python:
+From the repository root, check Python:
 
 ```bash
-cd ~/amaze-test-flight
+cd ~/amaze-autonomous-drone
 python --version
 ```
 
@@ -215,13 +204,13 @@ The help output should include `--fly`, `--goal`, `--height`, `--uri`, and `--di
 
 ### Prepare Docker and the shared folder
 
-Start Docker Desktop and wait until its engine is running. In the dashboard terminal:
+Start Docker Desktop and wait until its engine is running. From the repository root:
 
 ```bash
-cd ~/amaze-dashboard
+cd ~/amaze-autonomous-drone
 docker version
 docker compose version
-mkdir -p ../amaze-test-flight/telemetry
+mkdir -p telemetry
 ```
 
 `docker version` should show a server as well as a client. The `mkdir` command creates the telemetry folder if needed and does not clear existing files. The folder must exist before Docker mounts it.
@@ -233,7 +222,7 @@ Before using Docker, stop any old `python -m http.server 8000` server and `dataT
 ### Start the dashboard services in terminal one
 
 ```bash
-cd ~/amaze-dashboard
+cd ~/amaze-autonomous-drone
 docker compose -f compose.telemetry.yml up --build -d
 docker compose -f compose.telemetry.yml ps
 docker compose -f compose.telemetry.yml logs --tail 30 bridge
@@ -264,7 +253,7 @@ An empty graph before the first flight is normal. If recent files from a previou
 Once the supervised hardware setup is ready:
 
 ```bash
-cd ~/amaze-test-flight
+cd ~/amaze-autonomous-drone
 ./.venv/Scripts/python.exe algorithms/reactive_nav.py --fly --goal 2.0 0.0 --height 0.45 --uri radio://0/80/2M/E7E7E7E7E7 --diag
 ```
 
@@ -276,7 +265,7 @@ cd ~/amaze-test-flight
 | `--uri radio://0/80/2M/E7E7E7E7E7` | Use this configured radio connection. It must match the team's actual drone setup. |
 | `--diag` | Print position, heading, and command diagnostics. It does not enable JSON export; export is already part of this flight path. |
 
-Run from `amaze-test-flight` so the relative `telemetry` path is the folder Docker reads. Do not also run `dataTest.py --uri ...` or bare `dataTest.py`; those modes open another radio connection. Do not run a fake source during a real-data test.
+Run from the repository root so the relative `telemetry` path is the folder Docker reads. Do not also run `dataTest.py --uri ...` or bare `dataTest.py`; those modes open another radio connection. Do not run a fake source during a real-data test.
 
 ### Confirm that this run is collecting and displaying data
 
@@ -291,7 +280,7 @@ During the test, verify all three observations:
 For a simple file check in a third Git Bash terminal, run the following twice a few seconds apart:
 
 ```bash
-cd ~/amaze-test-flight
+cd ~/amaze-autonomous-drone
 ./.venv/Scripts/python.exe -c "import json; from pathlib import Path; [(print(p.name, 'samples=', len(s), 'latest=', s[-1] if s else None)) for p in sorted(Path('telemetry').glob('kalman_state_*.json')) for s in [json.loads(p.read_text())]]"
 ```
 
@@ -306,7 +295,7 @@ Keep the JSON bridge running to view saved measurements. Use the bottom **Time C
 **Archive both files before the next flight.** The writer initializes fresh arrays at the next flight start and replaces the current X/Y files. After the flight process has finished, copy the folder with File Explorer or use:
 
 ```bash
-cd ~/amaze-test-flight
+cd ~/amaze-autonomous-drone
 mkdir -p flight-archives
 cp -r telemetry "flight-archives/flight-$(date +%Y%m%d-%H%M%S)"
 ```
@@ -316,7 +305,7 @@ This creates a timestamped copy; it does not delete the working folder. Record t
 ### Stop the services when finished
 
 ```bash
-cd ~/amaze-dashboard
+cd ~/amaze-autonomous-drone
 docker compose -f compose.telemetry.yml down
 ```
 
@@ -326,11 +315,11 @@ This stops and removes the demo containers and their network. It does not delete
 
 Use this path instead of Docker, not alongside it on the same ports. The real-flight command is unchanged.
 
-On first use, from the dashboard folder:
+On first use, from the repository root:
 
 ```bash
-cd ~/amaze-dashboard
-../amaze-test-flight/.venv/Scripts/python.exe -m pip install -r dashboard/requirements-demo.txt
+cd ~/amaze-autonomous-drone
+./.venv/Scripts/python.exe -m pip install -r dashboard/requirements-demo.txt
 npm.cmd --prefix openmct-tutorial ci
 ```
 
@@ -339,15 +328,15 @@ The second command requires Node and npm on Windows. With Docker, this asset set
 In dashboard terminal one, start the JSON bridge:
 
 ```bash
-cd ~/amaze-dashboard
-../amaze-test-flight/.venv/Scripts/python.exe dashboard/dataTest.py --json-dir ../amaze-test-flight/telemetry
+cd ~/amaze-autonomous-drone
+./.venv/Scripts/python.exe dashboard/dataTest.py --json-dir telemetry
 ```
 
 In dashboard terminal two, start the web server:
 
 ```bash
-cd ~/amaze-dashboard
-../amaze-test-flight/.venv/Scripts/python.exe -m http.server 8000
+cd ~/amaze-autonomous-drone
+./.venv/Scripts/python.exe -m http.server 8000
 ```
 
 Keep both terminals open. Visit the same dashboard URL. Use a third terminal for the flight command. Stop the two dashboard processes with `Ctrl+C` after the flight and review are complete.
@@ -355,7 +344,7 @@ Keep both terminals open. Visit the same dashboard URL. Use a third terminal for
 For a hardware-free visual check, replace the native bridge command with:
 
 ```bash
-../amaze-test-flight/.venv/Scripts/python.exe dashboard/dataTest.py --fake
+./.venv/Scripts/python.exe dashboard/dataTest.py --fake
 ```
 
 This produces synthetic X/Y curves near -1 to +1 meters. It proves that the live display can receive values, not that a drone is producing measurements. Stop it before selecting the real JSON source.
@@ -377,7 +366,7 @@ The browser test compared 15 known samples for each metric, including exact time
 
 Other regressions covered missing, empty, malformed, or inaccessible files; invalid numbers; duplicate or out-of-order timestamps; file reset; bounded queues; two clients; slow-client isolation; and a subscriber callback that fails. These checks cover identified failure cases, not every possible operating condition.
 
-For a repeatable software check from `amaze-test-flight`:
+For a repeatable software check from the repository root:
 
 ```bash
 ./.venv/Scripts/python.exe -m pip install websockets==17.2
@@ -388,12 +377,12 @@ node --test dev_scripts/test_telemetry_plugin.cjs
 For the browser checks, install the test-only browser driver package and use an installed Chrome browser:
 
 ```bash
-npm.cmd --prefix ../amaze-dashboard/openmct-tutorial install --no-save playwright-core
+npm.cmd --prefix openmct-tutorial install --no-save playwright-core
 node dev_scripts/test_telemetry_browser.cjs
 TELEMETRY_E2E_DOCKER=1 node dev_scripts/test_telemetry_browser.cjs
 ```
 
-Build the Docker demo image before the Docker test. The test defaults expect adjacent checkout folders and Chrome at its usual Windows location. Set `CHROME_PATH`, `DASHBOARD_ROOT`, or `FLIGHT_PYTHON` if these differ. Installing tutorial dependencies again with `npm ci` removes the temporary Playwright installation, so reinstall it before browser testing. Do not run the repository's root `test.py` as a test-suite shortcut; it deletes files.
+Build the Docker demo image before the Docker test. The test defaults use this checkout and Chrome at its usual Windows location. Set `CHROME_PATH` if Chrome is installed elsewhere. Installing tutorial dependencies again with `npm ci` removes the temporary Playwright installation, so reinstall it before browser testing. Do not run the repository's root `test.py` as a test-suite shortcut; it deletes files.
 
 A hardware test still needs to establish whether samples arrive continuously while airborne, whether radio loss or estimator problems create gaps, and whether disk work affects logging timing. It should record duration, received sample counts, timestamp gaps, missing or invalid values, and the relationship between saved data and the graph. The expected 20 Hz configuration is a comparison point, not a pass result already obtained.
 
@@ -407,7 +396,7 @@ Current implementation limits also include full-array file rewrites on every sam
 | `unrecognized arguments: --diag` | Check the flight script version and folder with `pwd` and `--help`. Obtain the reviewed updated flight code. |
 | Docker cannot connect to its server | Start Docker Desktop and wait for its engine; confirm `docker version` shows server information. |
 | Port already in use | Stop the old native web server or fake bridge, or another known demo stack, before starting Compose. |
-| Telemetry mount directory is missing | Run `mkdir -p ../amaze-test-flight/telemetry` from the dashboard folder and verify both folders are siblings. |
+| Telemetry mount directory is missing | From the repository root, run `mkdir -p telemetry`. |
 | Blank page or `openmct is not defined` | Use the reviewed loader/page files, build the current image, open the correct URL, and hard-refresh. Check browser console errors. |
 | Graph is empty | Select a measurement rather than My Items, check source files and bridge logs, and choose a time window containing the samples. |
 | Graph shows a smooth -1 to +1 curve regardless of the drone | Check for a fake source still running. The real workflow uses `--json-dir`. |

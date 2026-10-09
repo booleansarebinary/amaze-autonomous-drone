@@ -1,7 +1,7 @@
 """Hardware-free regression tests against the real flight writer and demo bridge.
 
 Run from the flight repo: python -m unittest dev_scripts.test_telemetry_integration -v
-Set DASHBOARD_ROOT if the dashboard worktree isn't the adjacent amaze-dashboard.
+Set DASHBOARD_ROOT only when running these tests against a separate dashboard checkout.
 """
 import asyncio
 import importlib.util
@@ -17,7 +17,7 @@ from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD = Path(os.environ.get('DASHBOARD_ROOT', ROOT.parent / 'amaze-dashboard'))
+DASHBOARD = Path(os.environ.get('DASHBOARD_ROOT', ROOT))
 spec = importlib.util.spec_from_file_location('demo_bridge', DASHBOARD / 'dashboard/dataTest.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
