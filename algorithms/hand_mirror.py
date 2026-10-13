@@ -105,7 +105,7 @@ def compute_velocities(front, left, up, height=None, back=None, right=None):
     """
     vx = axis_velocity(front, back)
     vy = axis_velocity(left, right)
-    vz = proportional_velocity(up)
+    vz = 0
 
     # Keep the drone between MIN_HEIGHT and MAX_HEIGHT above whatever is below.
     if height is not None:
@@ -116,6 +116,21 @@ def compute_velocities(front, left, up, height=None, back=None, right=None):
     vx = respect_clearance(vx, front, back)
     vy = respect_clearance(vy, left, right)
     return vx, vy, vz
+
+
+def limit_climb_rate(vz, commanded_z):
+    """Limit vz so the commanded height stays within [MIN_HEIGHT, MAX_HEIGHT].
+
+    MotionCommander turns vz into a height setpoint that keeps integrating,
+    and the drone lags behind that setpoint. Checking the *measured* height
+    is too late: by the time it reads MIN_HEIGHT the setpoint is already
+    near the floor, and the drone follows it down. So bound the setpoint
+    itself, over the next tick.
+    """
+    lowest = (MIN_HEIGHT - commanded_z) / LOOP_DT
+    highest = (MAX_HEIGHT - commanded_z) / LOOP_DT
+    vz = max(lowest, min(highest, vz))
+    return max(-MAX_VELOCITY, min(MAX_VELOCITY, vz))
 
 
 def main(argv=None):
@@ -133,6 +148,11 @@ def main(argv=None):
             # zranger=True so .down is populated for the height limits;
             # 50 ms matches LOOP_DT so each tick sees a fresh reading.
             with Multiranger(scf, rate_ms=50, zranger=True) as multi_ranger:
+                # Track the height setpoint the same way MotionCommander
+                # integrates it, so limit_climb_rate can bound it.
+                commanded_z = motion_commander.default_height
+                last_vz = 0.0
+                last_time = time.time()
                 try:
                     while True:
                         vx, vy, vz = compute_velocities(
@@ -143,7 +163,11 @@ def main(argv=None):
                             back=multi_ranger.back,
                             right=multi_ranger.right,
                         )
+                        now = time.time()
+                        commanded_z += last_vz * (now - last_time)
+                        vz = limit_climb_rate(vz, commanded_z)
                         motion_commander.start_linear_motion(vx, vy, vz)
+                        last_vz, last_time = vz, now
                         time.sleep(LOOP_DT)
 
                 except KeyboardInterrupt:
