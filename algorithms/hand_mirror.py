@@ -36,6 +36,7 @@ MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
 MAX_DETECT_DISTANCE = 1.2   # (m) further than this is a wall, not a hand
 MIN_HEIGHT = 0.2            # (m) never command a descent below this height
 MAX_HEIGHT = 1.0            # (m) never command an ascent above this height
+DESCEND_ABOVE_HEIGHT = 0.7  # (m) a hand above can only push the drone down above this
 SAFE_CLEARANCE = 0.35       # (m) don't move toward an obstacle closer than this
 
 
@@ -97,15 +98,21 @@ def compute_velocities(front, left, up, height=None, back=None, right=None):
             pulls it backward.
     y-axis: left/right sensors. Positive y is left in the body frame.
     z-axis: the up sensor; a growing distance above means the hand moved up,
-            so follow it upward.
+            so follow it upward. A hand close above only pushes the drone
+            down while it is higher than DESCEND_ABOVE_HEIGHT.
 
     height (optional) is the down-ranger reading; descent is dropped below
-    MIN_HEIGHT and ascent above MAX_HEIGHT. back/right are optional so the
+    MIN_HEIGHT (and below DESCEND_ABOVE_HEIGHT, or when height is unknown)
+    and ascent above MAX_HEIGHT. back/right are optional so the
     drone still works with only front/left/up.
     """
     vx = axis_velocity(front, back)
     vy = axis_velocity(left, right)
-    vz = 0
+    vz = proportional_velocity(up)
+
+    # Only climb, unless the drone is high enough that descending is safe.
+    if vz < 0 and (height is None or height <= DESCEND_ABOVE_HEIGHT):
+        vz = 0.0
 
     # Keep the drone between MIN_HEIGHT and MAX_HEIGHT above whatever is below.
     if height is not None:
