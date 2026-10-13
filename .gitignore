@@ -205,6 +205,9 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Live Crazyflie telemetry written during --fly runs
+telemetry/
+
 # Ruff stuff:
 .ruff_cache/
 

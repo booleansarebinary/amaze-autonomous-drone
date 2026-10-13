@@ -1,0 +1,15 @@
+{
+  "description": "Stationary head-on approach at field equilibrium; alternating +/-5 mm range perturbation, 30 steps at 15 Hz, flight defaults, no velocity input.",
+  "results": {
+    "before": {
+      "peak_speed": 0.28,
+      "peak_command_accel": 2.835,
+      "rms_speed": 0.11194813612560835
+    },
+    "after": {
+      "peak_speed": 0.0035840707964602207,
+      "peak_command_accel": 0.05211168054081841,
+      "rms_speed": 0.0020083289432308565
+    }
+  }
+}
