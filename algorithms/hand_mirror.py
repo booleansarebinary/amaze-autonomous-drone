@@ -1,7 +1,6 @@
 """
 Hand-mirroring demo for the Crazyflie 2.x using the Flow deck + Multiranger deck.
 
-
 Instead of fleeing from a nearby hand (like the original "push" example),
 this keeps the drone trying to hold a fixed TARGET_DISTANCE from your hand
 on each axis (front/back, left/right, up). Move your hand further away on
@@ -10,7 +9,6 @@ backs off. This is a proportional "leash" controller, not true absolute
 position tracking, but for slow, roughly axis-aligned hand motion it feels
 like mirroring.
 
-
 Press Ctrl-C to land and exit (the old "hand above drone = land" gesture is
 removed since the up-sensor is now used continuously for z control).
 """
@@ -18,19 +16,15 @@ import logging
 import sys
 import time
 
-
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
 
-
 URI = 'radio://0/80/2M'
 
-
 logging.basicConfig(level=logging.ERROR)
-
 
 # --- Tuning knobs ---
 TARGET_DISTANCE = 0.4   # (m) desired gap to hold from your hand on each axis
@@ -42,105 +36,122 @@ MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
 MAX_DETECT_DISTANCE = 1.2   # (m) further than this is a wall, not a hand
 MIN_HEIGHT = 0.2            # (m) never command a descent below this height
 MAX_HEIGHT = 1.0            # (m) never command an ascent above this height
-SAFE_CLEARANCE = 0.25       # (m) don't retreat toward an obstacle closer than this
+SAFE_CLEARANCE = 0.35       # (m) don't move toward an obstacle closer than this
+
+
+def in_hand_range(measured):
+    """True if a ranger reading is close enough to be a hand, not a wall."""
+    return (measured is not None
+            and MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE)
 
 
 def proportional_velocity(measured, sign=1.0):
-   """
-   Turn a single ranger reading into a velocity command that tries to
-   hold TARGET_DISTANCE from whatever the sensor sees.
-   sign flips which physical direction counts as "closing the gap"
-   for that particular sensor's mounting orientation.
-   """
-   if measured is None or not (MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE):
-       return 0.0  # nothing that could be a hand on this axis, don't move on it
+    """
+    Turn a single ranger reading into a velocity command that tries to
+    hold TARGET_DISTANCE from whatever the sensor sees.
+    sign flips which physical direction counts as "closing the gap"
+    for that particular sensor's mounting orientation.
+    """
+    if not in_hand_range(measured):
+        return 0.0  # nothing that could be a hand on this axis, don't move on it
+
+    error = measured - TARGET_DISTANCE
+    if abs(error) < DEADBAND:
+        return 0.0
+
+    velocity = sign * KP * error
+    return max(-MAX_VELOCITY, min(MAX_VELOCITY, velocity))
 
 
-   error = measured - TARGET_DISTANCE
-   if abs(error) < DEADBAND:
-       return 0.0
+def axis_velocity(positive, negative):
+    """Velocity along one axis from the two opposite-facing sensors on it.
+
+    positive is the sensor facing the +axis direction (front or left),
+    negative the one facing the -axis direction (back or right). Only the
+    nearer in-range reading is followed, since that is most likely the hand;
+    following both would make the drone settle midway between your hand and
+    whatever is on the other side.
+    """
+    if in_hand_range(positive) and (not in_hand_range(negative)
+                                    or positive <= negative):
+        return proportional_velocity(positive)
+    if in_hand_range(negative):
+        return proportional_velocity(negative, sign=-1.0)
+    return 0.0
 
 
-   velocity = sign * KP * error
-   return max(-MAX_VELOCITY, min(MAX_VELOCITY, velocity))
+def respect_clearance(velocity, positive, negative):
+    """Cancel motion toward an obstacle closer than SAFE_CLEARANCE."""
+    if velocity > 0 and positive is not None and positive < SAFE_CLEARANCE:
+        return 0.0
+    if velocity < 0 and negative is not None and negative < SAFE_CLEARANCE:
+        return 0.0
+    return velocity
 
 
+def compute_velocities(front, left, up, height=None, back=None, right=None):
+    """One control tick: ranger readings in, a body-frame velocity out.
 
+    x-axis: front/back sensors. Positive x is forward, so a hand moving away
+            in front pulls the drone forward, and a hand moving away behind
+            pulls it backward.
+    y-axis: left/right sensors. Positive y is left in the body frame.
+    z-axis: the up sensor; a growing distance above means the hand moved up,
+            so follow it upward.
 
-def compute_velocities(front, left, up,
-                      height=None, back=None, right=None):
-   """One control tick: three ranger readings in, a body-frame velocity out.
+    height (optional) is the down-ranger reading; descent is dropped below
+    MIN_HEIGHT and ascent above MAX_HEIGHT. back/right are optional so the
+    drone still works with only front/left/up.
+    """
+    vx = axis_velocity(front, back)
+    vy = axis_velocity(left, right)
+    vz = proportional_velocity(up)
 
+    # Keep the drone between MIN_HEIGHT and MAX_HEIGHT above whatever is below.
+    if height is not None:
+        if (height <= MIN_HEIGHT and vz < 0) or (height >= MAX_HEIGHT and vz > 0):
+            vz = 0.0
 
-   x-axis: the front sensor reads "how far is my hand in front of me", and
-           positive x is forward, so a growing front distance means move
-           forward.
-   y-axis: the left sensor, and positive y is left in the body frame.
-   z-axis: the up sensor; a growing distance above means the hand moved up,
-           so follow it upward.
-
-
-   height (optional) is the down-ranger reading; below MIN_HEIGHT any
-   downward command is dropped so a hand overhead can't push the drone
-   into the floor.
-   """
-   vx = proportional_velocity(front)
-   vy = proportional_velocity(left)
-   vz = proportional_velocity(up)
-
-
-   # IF the down sensor gave a reading
-   if height is not None:
-       # IF the height is too low or high, cancel any command that would push the drone down
-       if height <= MIN_HEIGHT and vz < 0 or height >= MAX_HEIGHT and vz > 0:
-           vz = 0.0
-
-
-   # Negative vx means moving backwards. If something is right behind the drone, don't move back
-   if vx < 0 and back is not None and back < SAFE_CLEARANCE:
-       vx = 0.0
-   # Negative vy is moving sideways. Stop if close to the side
-   if vy < 0 and right is not None and right < SAFE_CLEARANCE:
-       vy = 0.0
-   return vx, vy, vz
-
-
+    # Don't move toward anything too close on the side we're heading for.
+    vx = respect_clearance(vx, front, back)
+    vy = respect_clearance(vy, left, right)
+    return vx, vy, vz
 
 
 def main(argv=None):
-   argv = sys.argv[1:] if argv is None else argv
-   uri = argv[0] if argv else URI
+    argv = sys.argv[1:] if argv is None else argv
+    uri = argv[0] if argv else URI
+
+    cflib.crtp.init_drivers(enable_debug_driver=False)
+
+    cf = Crazyflie(rw_cache='./cache')
+    with SyncCrazyflie(uri, cf=cf) as scf:
+        scf.cf.platform.send_arming_request(True)
+        time.sleep(1.0)
+
+        with MotionCommander(scf) as motion_commander:
+            # zranger=True so .down is populated for the height limits;
+            # 50 ms matches LOOP_DT so each tick sees a fresh reading.
+            with Multiranger(scf, rate_ms=50, zranger=True) as multi_ranger:
+                try:
+                    while True:
+                        vx, vy, vz = compute_velocities(
+                            multi_ranger.front,
+                            multi_ranger.left,
+                            multi_ranger.up,
+                            height=multi_ranger.down,
+                            back=multi_ranger.back,
+                            right=multi_ranger.right,
+                        )
+                        motion_commander.start_linear_motion(vx, vy, vz)
+                        time.sleep(LOOP_DT)
+
+                except KeyboardInterrupt:
+                    print('Landing...')
+
+        print('Demo terminated!')
+    return 0
 
 
-   cflib.crtp.init_drivers(enable_debug_driver=False)
-
-
-   cf = Crazyflie(rw_cache='./cache')
-   with SyncCrazyflie(uri, cf=cf) as scf:
-       scf.cf.platform.send_arming_request(True)
-       time.sleep(1.0)
-
-
-       with MotionCommander(scf) as motion_commander:
-           with Multiranger(scf, rate_ms=50, zranger=True) as multi_ranger:
-               try:
-                   while True:
-                       # Read all sensors and compute this tick's velocity command.
-                       vx, vy, vz = compute_velocities(
-                           multi_ranger.front,
-                           multi_ranger.left,
-                           multi_ranger.up,
-                           multi_ranger.down,
-                           multi_ranger.back,
-                           multi_ranger.right,
-                       )
-                       # Send the velocities the drone and wait for next tick
-                       motion_commander.start_linear_motion(vx, vy, vz)
-                       time.sleep(LOOP_DT)
-               except KeyboardInterrupt:
-                   print('Landing...')
-       print('Demo terminated!')
-   return 0
 if __name__ == '__main__':
-   raise SystemExit(main())
-
+    raise SystemExit(main())
