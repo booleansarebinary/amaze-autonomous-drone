@@ -55,11 +55,11 @@ def collect_telemetry() -> None:
                         "utc": int(time.time() * 1000),
                         "crazyflie_timestamp": timestamp,
                         "values": {
-                            "drone.battery.voltage": data["pm.vbat"],
-                            "drone.attitude.roll": data["stabilizer.roll"],
-                            "drone.attitude.pitch": data["stabilizer.pitch"],
-                            "drone.attitude.yaw": data["stabilizer.yaw"],
-                        },
+                             "drone.battery.voltage": round(data["pm.vbat"], 1),
+                             "drone.attitude.roll": round(data["stabilizer.roll"], 1),
+                             "drone.attitude.pitch": round(data["stabilizer.pitch"], 1),
+                             "drone.attitude.yaw": round(data["stabilizer.yaw"], 1),
+},
                     }
 
                     message = json.dumps(telemetry)
