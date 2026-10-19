@@ -30,8 +30,8 @@ from cflib.utils import uri_helper
 URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 
 # Coordinates of the stationary object, in your positioning system's frame (meters)
-OBJECT_X = 0.0
-OBJECT_Y = 0.0
+OBJECT_X = 0.4
+OBJECT_Y = 0.4
 
 ORBIT_RADIUS = 0.4      # meters
 ORBIT_HEIGHT = 0.5      # meters (flight altitude)
