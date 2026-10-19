@@ -31,7 +31,7 @@ TARGET_DISTANCE = 0.4   # (m) desired gap to hold from your hand on each axis
 DEADBAND = 0.05         # (m) ignore error smaller than this, to reduce jitter
 KP = 1.5                # proportional gain: velocity = KP * error
 MAX_VELOCITY = 0.6      # (m/s) clamp so it doesn't lurch
-LOOP_DT = 0.05          # (s) ~20 Hz control loop
+LOOP_DT = 0.05          # (s) ~20 Hz control loop   
 MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
 MAX_DETECT_DISTANCE = 1.2   # (m) further than this is a wall, not a hand
 MIN_HEIGHT = 0.2            # (m) never command a descent below this height
@@ -42,8 +42,7 @@ SAFE_CLEARANCE = 0.35       # (m) don't move toward an obstacle closer than this
 
 def in_hand_range(measured):
     """True if a ranger reading is close enough to be a hand, not a wall."""
-    return (measured is not None
-            and MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE)
+    return (measured is not None and MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE)
 
 
 def proportional_velocity(measured, sign=1.0):
@@ -73,8 +72,7 @@ def axis_velocity(positive, negative):
     following both would make the drone settle midway between your hand and
     whatever is on the other side.
     """
-    if in_hand_range(positive) and (not in_hand_range(negative)
-                                    or positive <= negative):
+    if in_hand_range(positive) and (not in_hand_range(negative) or positive <= negative):
         return proportional_velocity(positive)
     if in_hand_range(negative):
         return proportional_velocity(negative, sign=-1.0)
