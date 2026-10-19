@@ -2,13 +2,14 @@
 <html>
 <head>
     <title>Open MCT Tutorials</title>
-    <script src="node_modules/openmct/dist/openmct.js"></script>
-    <script src="lib/http.js"></script>
+    <script src="../openmct-tutorial/node_modules/openmct/dist/openmct.js"></script>
+    <script src="../openmct-tutorial/lib/http.js"></script>
     <script src="dictionary-plugin.js"></script>
+    <script src="crazyflie-telemetry-plugin.js"></script>
     <!-- <script src="historical-telemetry-plugin.js"></script>
     <script src="realtime-telemetry-plugin.js"></script> -->
     <script>
-        openmct.setAssetPath('node_modules/openmct/dist');
+        openmct.setAssetPath('../openmct-tutorial/node_modules/openmct/dist');
         openmct.install(openmct.plugins.LocalStorage());
         openmct.install(openmct.plugins.MyItems());
         openmct.install(openmct.plugins.UTCTimeSystem());
@@ -18,6 +19,7 @@
         openmct.install(openmct.plugins.Espresso());
 
         openmct.install(DictionaryPlugin());
+        openmct.install(CrazyflieTelemetryPlugin());
         // openmct.install(HistoricalTelemetryPlugin());
         // openmct.install(RealtimeTelemetryPlugin());
         document.addEventListener('DOMContentLoaded', () => {
