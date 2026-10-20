@@ -14,7 +14,7 @@ from cflib.crazyflie.syncLogger import SyncLogger
 from websockets.asyncio.server import serve
 
 URI = "radio://0/80/2M/E7E7E7E7E7"
-WEBSOCKET_HOST = "localhost"
+WEBSOCKET_HOST = "0.0.0.0"
 WEBSOCKET_PORT = 8765
 
 telemetry_queue: queue.Queue[str] = queue.Queue(maxsize=1)
