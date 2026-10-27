@@ -33,7 +33,7 @@ URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 OBJECT_X = 0.0
 OBJECT_Y = 0.0
 
-ORBIT_RADIUS = 0.4      # meters
+ORBIT_RADIUS = 0.5      # meters
 ORBIT_HEIGHT = 0.5      # meters (flight altitude)
 ORBIT_PERIOD = 8.0      # seconds for one full revolution
 NUM_LAPS = 1
