@@ -1,0 +1,58 @@
+# Mission 1 implementation progress
+
+Source of behavior: `../mission1_astrophage_colony_design.md`. Process/safety: Victor's Mission 1 orchestrator prompt, 2026-10-26.
+
+Worktree: `C:/Users/victo/amaze-hula-hoop`; only writable branch for this run: `astrophage-collection`.
+
+## Chunk status
+
+| Chunk | Scope | Status |
+|---|---|---|
+| 0 | Reconnaissance and plan | awaiting approval |
+| 1 | Foundations and pinned Docker environment | not started |
+| 2 | Simulator | not started |
+| 3 | Perception | not started |
+| 4 | Visibility | not started |
+| 5 | Collection and energy | not started |
+| 6 | Control and safety | not started |
+| 7 | Planner and baselines | not started |
+| 8 | Mission loop and evaluation | not started |
+| 9 | Radio, telemetry, recording and replay | not started |
+| 10 | Flight mode | not started |
+
+## Approved chunks
+
+None. No push authorized. Starting commit: `a838533025480253e6a592baff163f98a1962208`.
+
+## Persistent sub-agent roster
+
+| Role | Instance identifier | Created | Ownership |
+|---|---|---|---|
+| Scout | `/root/scout` | Chunk 0 | `docs/implementation/scout_notes.md`; read-only elsewhere |
+| Builder | `/root/builder` | Chunk 0 | Mission production package, tools, mission Docker files; no production work in Chunk 0 |
+| Validator | `/root/validator` | Chunk 0 | `tests/mission1/` and fixtures; independent review |
+
+No replacement instances created. Orchestrator owns briefs, progress, reports and final review/commits. Resume from this file, the latest report and Scout's cache; reuse the roster.
+
+## Decisions log
+
+| Decision | By | Chunk | Reason |
+|---|---|---|---|
+| Perform reconnaissance only, then stop for approval | Victor | 0 | Explicit chunk boundary |
+| Docker development isolation overrides design §18; host radio sessions remain Victor-only | Victor | 0 | Process and safety precedence |
+| No production/test changes or execution in Chunk 0 | Orchestrator | 0 | Recon scope; no mission image/suite exists yet |
+| Keep strict Chunk 8 gate: zero violations and planner mean exceeds every baseline | Orchestrator, Validator review | 0 | Design §17 wins over weaker "or explain why" wording |
+| Do not use existing generic root Docker files for mission tests | Victor | 0 | Preserve teammates' environment; root Python 3.9 conflicts with repository Python 3.10 target |
+| Reject a no-op commander facade as the passive zero-call solution | Orchestrator, Builder review | 0 | Suppressing transmission still invokes a commander method; preserve Victor's literal zero-call guarantee |
+
+No Builder/Validator test disputes have occurred.
+
+## Open questions
+
+See numbered decisions 1–8 in `chunk_0_report.md`: Sarah adaptation; hardware inventory; HIT/NO_RETURN/INVALID contract before Chunk 1; layout spacing; colony-loss threshold and box enclosure; width-refinement scoring; emergency priorities and fallback landing; passive disconnect, velocity source and radio ownership. No unresolved behavior will be implemented by assumption. Physical checks remain Victor-only.
+
+## Current boundary
+
+Chunk 0 report: `chunk_0_report.md`. Local checkpoint message: `mission1(chunk 0): document reconnaissance and implementation gates`; resolve the containing commit with `git log -1 --format="%H %s" -- docs/implementation/chunk_0_report.md` from the root. Record its hash here when the chunk is approved; the commit cannot contain its own hash.
+
+No hardware commands, production code, test execution or push performed. Chunk 1 requires Victor's approval and resolution of the foundational range contract. Supported replies: APPROVE (push then proceed), APPROVE, DON'T PUSH, CHANGES, or STOP. Persistent agents remain available for reuse.
