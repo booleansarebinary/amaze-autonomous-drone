@@ -27,10 +27,10 @@ URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 OBJECT_X = 0.0
 OBJECT_Y = 0.0
 
-ORBIT_RADIUS = 0.8      # meters
+ORBIT_RADIUS = 0.8     # meters
 ORBIT_HEIGHT = 0.5      # meters (flight altitude)
 ORBIT_PERIOD = 8.0      # seconds for one full revolution
-NUM_LAPS = 3
+NUM_LAPS = 1
 SETPOINT_HZ = 10        # rate at which setpoints are streamed
 FACE_CENTER = True      # if True, the drone yaws to always face the object
 # ---------------------------------------------------------------------
