@@ -1,16 +1,14 @@
 """
 Hand-mirroring demo for the Crazyflie 2.x using the Flow deck + Multiranger deck.
 
-Instead of fleeing from a nearby hand (like the original "push" example),
-this keeps the drone trying to hold a fixed TARGET_DISTANCE from your hand
+This program keeps the drone trying to hold a fixed TARGET_DISTANCE from your hand
 on each axis (front/back, left/right, up). Move your hand further away on
 an axis -> the drone follows to close the gap. Move it closer -> the drone
 backs off. This is a proportional "leash" controller, not true absolute
 position tracking, but for slow, roughly axis-aligned hand motion it feels
 like mirroring.
 
-Press Ctrl-C to land and exit (the old "hand above drone = land" gesture is
-removed since the up-sensor is now used continuously for z control).
+Press Ctrl-C to land and exit
 """
 import logging
 import sys
@@ -29,8 +27,8 @@ logging.basicConfig(level=logging.ERROR)
 # --- Tuning knobs ---
 TARGET_DISTANCE = 0.5   # (m) desired gap to hold from your hand on each axis
 DEADBAND = 0.03         # (m) ignore error smaller than this, to reduce jitter
-KP = 1.5                # proportional gain: velocity = KP * error
-KD = 0.8                # gain on how fast the gap is changing (hand speed relative to drone)
+KP = 7.0                # proportional gain: velocity = KP * error
+KD = 2.5                # gain on how fast the gap is changing (hand speed relative to drone)
 MAX_VELOCITY = 0.8      # (m/s) clamp so it doesn't lurch
 LOOP_DT = 0.05          # (s) ~20 Hz control loop
 MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
@@ -100,6 +98,13 @@ def track_velocity(track, sign=1.0):
     if abs(error) < DEADBAND:
         error = 0.0
 
+    """
+    Main velocity calculation
+
+    error is the difference between the current and target distance.
+    track rate is the rate of change of the error.
+    KP and KD are constants, the proportional and derivative gains, respectively.
+    """
     velocity = sign * (KP * error + KD * track.rate)
     return max(-MAX_VELOCITY, min(MAX_VELOCITY, velocity))
 
