@@ -15,8 +15,11 @@ Each control cycle:
   3. Compute a radial velocity: push away if closer than the desired
      standoff distance, pull in if farther.
   4. Compute a tangential velocity: perpendicular to the object
-     direction, at a constant orbit speed -- this is what makes the
-     drone circle rather than just hover at a fixed distance.
+     direction. Its SPEED SCALES WITH THE MEASURED RADIUS
+     (tangential_speed = ANGULAR_SPEED * radius) so the drone's
+     ANGULAR rate around the object stays roughly constant --
+     this prevents overturning when the drone is closer than the
+     desired standoff, and under-turning when it's farther away.
   5. Sum radial + tangential, cap the magnitude, send as a body-frame
      velocity setpoint.
   6. If no sensor sees anything, spin slowly in place to search.
@@ -47,7 +50,14 @@ MAX_SENSOR_RANGE = 2.0     # meters, ignore readings beyond this (no detection)
 MIN_SENSOR_RANGE = 0.05    # meters, ignore obviously invalid near-zero readings
 
 K_RADIAL = 0.8             # proportional gain, distance error -> radial speed
-ORBIT_SPEED = 0.15         # m/s, constant tangential (circling) speed
+
+# --- Tangential term is now ANGLE-based instead of a fixed linear speed ---
+ANGULAR_SPEED = 0.3        # rad/s, constant angular rate around the object
+MIN_RADIUS_FOR_CALC = 0.1  # meters, floor so tangential speed doesn't collapse
+                           # or spike if a reading is near zero / noisy
+USE_RADIAL_ERROR_DAMPING = True  # optional: shrink tangential term when
+                                 # badly off the desired standoff distance
+
 MAX_SPEED = 0.3            # m/s, safety cap on total commanded speed
 SEARCH_YAW_RATE = 30       # deg/s, spin rate when no object is detected
 ORBIT_DURATION = 40.0      # seconds to orbit before landing
@@ -108,10 +118,20 @@ def compute_velocity_command():
     radial_x = K_RADIAL * error * dx
     radial_y = K_RADIAL * error * dy
 
-    # Tangential term: constant-speed circling, perpendicular to object direction
+    # Tangential term: speed now scales with the measured radius, so the
+    # ANGULAR rate (rad/s) stays constant instead of the linear speed.
+    # This is what stops the drone from overturning when it's closer than
+    # DESIRED_STANDOFF, and under-turning when it's farther away.
+    safe_radius = max(nearest_range, MIN_RADIUS_FOR_CALC)
+    tangential_speed = ANGULAR_SPEED * safe_radius
+
+    if USE_RADIAL_ERROR_DAMPING:
+        damping = max(0.3, 1 - abs(error) / DESIRED_STANDOFF)
+        tangential_speed *= damping
+
     tx, ty = rotate90_ccw(dx, dy)
-    tangential_x = ORBIT_SPEED * tx
-    tangential_y = ORBIT_SPEED * ty
+    tangential_x = tangential_speed * tx
+    tangential_y = tangential_speed * ty
 
     vx = radial_x + tangential_x
     vy = radial_y + tangential_y
