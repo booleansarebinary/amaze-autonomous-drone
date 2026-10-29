@@ -8,8 +8,8 @@ Worktree: `C:/Users/victo/amaze-hula-hoop`; only writable branch for this run: `
 
 | Chunk | Scope | Status |
 |---|---|---|
-| 0 | Reconnaissance and plan | awaiting approval |
-| 1 | Foundations and pinned Docker environment | not started |
+| 0 | Reconnaissance and plan | approved |
+| 1 | Foundations and pinned Docker environment | in progress |
 | 2 | Simulator | not started |
 | 3 | Perception | not started |
 | 4 | Visibility | not started |
@@ -22,7 +22,9 @@ Worktree: `C:/Users/victo/amaze-hula-hoop`; only writable branch for this run: `
 
 ## Approved chunks
 
-None. No push authorized. Starting commit: `a838533025480253e6a592baff163f98a1962208`.
+| Date | Commit | Summary |
+|---|---|---|
+| 2026-10-29 | `cde04f8633c511af0e7cd8ca611c13f040f022da` | Chunk 0 reconnaissance, cflib API review, Docker readiness and refined plan; Victor approved |
 
 ## Persistent sub-agent roster
 
@@ -39,6 +41,7 @@ No replacement instances created. Orchestrator owns briefs, progress, reports an
 | Decision | By | Chunk | Reason |
 |---|---|---|---|
 | Perform reconnaissance only, then stop for approval | Victor | 0 | Explicit chunk boundary |
+| Approve and publish Chunk 0 | Victor | 0 | User replied APPROVE; push `astrophage-collection` and proceed |
 | Docker development isolation overrides design §18; host radio sessions remain Victor-only | Victor | 0 | Process and safety precedence |
 | No production/test changes or execution in Chunk 0 | Orchestrator | 0 | Recon scope; no mission image/suite exists yet |
 | Keep strict Chunk 8 gate: zero violations and planner mean exceeds every baseline | Orchestrator, Validator review | 0 | Design §17 wins over weaker "or explain why" wording |
@@ -53,6 +56,6 @@ See numbered decisions 1–8 in `chunk_0_report.md`: Sarah adaptation; hardware 
 
 ## Current boundary
 
-Chunk 0 report: `chunk_0_report.md`. Local checkpoint message: `mission1(chunk 0): document reconnaissance and implementation gates`; resolve the containing commit with `git log -1 --format="%H %s" -- docs/implementation/chunk_0_report.md` from the root. Record its hash here when the chunk is approved; the commit cannot contain its own hash.
+Chunk 0 report: `chunk_0_report.md`; approved commit: `cde04f8633c511af0e7cd8ca611c13f040f022da`.
 
-No hardware commands, production code, test execution or push performed. Chunk 1 requires Victor's approval and resolution of the foundational range contract. Supported replies: APPROVE (push then proceed), APPROVE, DON'T PUSH, CHANGES, or STOP. Persistent agents remain available for reuse.
+Chunk 0 was pushed after approval. Chunk 1 is in progress. Range outcome semantics remain open; implement independent foundations while awaiting Victor's answer, and do not finalize `RangeReading` behavior without it. Persistent agents remain available for reuse.
