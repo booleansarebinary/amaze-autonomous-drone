@@ -26,23 +26,23 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.6536818852940245" />
-      <entry key="MS500" value="6.4723875375947015" />
-      <entry key="S2" value="15.764811752195493" />
-      <entry key="S5" value="23.561611379280873" />
-      <entry key="S10" value="27.99348624705178" />
-      <entry key="S30" value="31.78690714326981" />
-      <entry key="S60" value="32.86444403932795" />
-      <entry key="M2" value="33.42475420793545" />
-      <entry key="M5" value="33.76808106388767" />
-      <entry key="M10" value="33.88373470051894" />
-      <entry key="M15" value="33.92242165922384" />
-      <entry key="M30" value="33.96117673001374" />
-      <entry key="H1" value="33.98369371754427" />
-      <entry key="H2" value="35.422848753733966" />
-      <entry key="H4" value="65.42817163008077" />
-      <entry key="D1" value="648.4885547752027" />
-      <entry key="W1" value="1304.2596562762735" />
+      <entry key="MS100" value="1.5164071943283504" />
+      <entry key="MS500" value="3.810158025144042" />
+      <entry key="S2" value="8.601767925433615" />
+      <entry key="S5" value="14.38243438314082" />
+      <entry key="S10" value="23.25892505524133" />
+      <entry key="S30" value="50.97312092821394" />
+      <entry key="S60" value="75.9811584676638" />
+      <entry key="M2" value="99.84508185386217" />
+      <entry key="M5" value="121.27217729862343" />
+      <entry key="M10" value="130.11304867980897" />
+      <entry key="M15" value="133.28574892408773" />
+      <entry key="M30" value="136.57962283843867" />
+      <entry key="H1" value="138.27669558535186" />
+      <entry key="H2" value="140.54814254974164" />
+      <entry key="H4" value="170.80950486105246" />
+      <entry key="D1" value="753.799857894478" />
+      <entry key="W1" value="1410.0671368411997" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -51,36 +51,36 @@
       <entry key="S5" value="0.0" />
       <entry key="S10" value="0.0" />
       <entry key="S30" value="0.0" />
-      <entry key="S60" value="1.14E-322" />
-      <entry key="M2" value="1.3595184739653822E-161" />
-      <entry key="M5" value="6.691791274350996E-65" />
-      <entry key="M10" value="1.1530051767695432E-32" />
-      <entry key="M15" value="6.425482477599929E-22" />
-      <entry key="M30" value="3.583480778657997E-11" />
-      <entry key="H1" value="8.464997090890136E-6" />
-      <entry key="H2" value="0.004114511816021642" />
-      <entry key="H4" value="0.09074297667022238" />
-      <entry key="D1" value="1.3701956144055938" />
-      <entry key="W1" value="2.6381096572910776" />
+      <entry key="S60" value="4.4E-323" />
+      <entry key="M2" value="6.596262674914913E-162" />
+      <entry key="M5" value="5.0108051787618785E-65" />
+      <entry key="M10" value="9.977318194175056E-33" />
+      <entry key="M15" value="5.83481988067334E-22" />
+      <entry key="M30" value="3.414805203486539E-11" />
+      <entry key="H1" value="8.263370792971819E-6" />
+      <entry key="H2" value="0.004065215077527725" />
+      <entry key="H4" value="0.09019773426655871" />
+      <entry key="D1" value="1.3688199963533827" />
+      <entry key="W1" value="2.6377311301403052" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.5981547265304419" />
-      <entry key="MS500" value="6.426790546811132" />
-      <entry key="S2" value="15.73463352430362" />
-      <entry key="S5" value="23.54173390372616" />
-      <entry key="S10" value="27.981165654600197" />
-      <entry key="S30" value="31.78210051971073" />
-      <entry key="S60" value="32.861939962391865" />
-      <entry key="M2" value="33.423475862695554" />
-      <entry key="M5" value="33.76756326395504" />
-      <entry key="M10" value="33.88347471099571" />
-      <entry key="M15" value="33.92224808981069" />
-      <entry key="M30" value="33.96108982357479" />
-      <entry key="H1" value="33.983658693017446" />
-      <entry key="H2" value="35.42694011919813" />
-      <entry key="H4" value="65.5188881824785" />
-      <entry key="D1" value="649.8586863974845" />
-      <entry key="W1" value="1306.897742171453" />
+      <entry key="MS100" value="1.4778687032046949" />
+      <entry key="MS500" value="3.7796647286735086" />
+      <entry key="S2" value="8.58276657751417" />
+      <entry key="S5" value="14.368314021259264" />
+      <entry key="S10" value="23.238113977758154" />
+      <entry key="S30" value="50.94564617391547" />
+      <entry key="S60" value="75.95939659310523" />
+      <entry key="M2" value="99.83091875629353" />
+      <entry key="M5" value="121.26544577489302" />
+      <entry key="M10" value="130.10947408065596" />
+      <entry key="M15" value="133.28331677777666" />
+      <entry key="M30" value="136.57838151687145" />
+      <entry key="H1" value="138.27607673333821" />
+      <entry key="H2" value="140.55189120013998" />
+      <entry key="H4" value="170.89952913921417" />
+      <entry key="D1" value="755.1685893834416" />
+      <entry key="W1" value="1412.7048407001098" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -91,30 +91,30 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.hop.executor&quot;: &quot;Run&quot;,
-    &quot;Python.orbit_prototype.executor&quot;: &quot;Run&quot;,
-    &quot;Python.reactive_nav.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;test__drone__flight&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.hop.executor": "Run",
+    "Python.orbit_prototype.executor": "Run",
+    "Python.reactive_nav.executor": "Run",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "MAIN__eridian__trench__run",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "python.packages.toolwindow.project.migrated.to.right.top.v2": "true",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "to.speed.mode.migration.done": "true"
   }
-}</component>
+}]]></component>
   <component name="RunManager" selected="Python.reactive_nav">
     <configuration name="hop" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="amaze-autonomous-drone" />
