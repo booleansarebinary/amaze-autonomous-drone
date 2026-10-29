@@ -14,11 +14,10 @@ Each control cycle:
      sensor selected until the target is lost.
   3. Compute a radial velocity: push away if closer than the desired
      standoff distance, pull in if farther.
-  4. Compute a tangential velocity: perpendicular to the object
-     direction, at a constant orbit speed -- this is what makes the
-     drone circle rather than just hover at a fixed distance.
+  4. Smooth the locked sensor's range to reduce jitter, then compute a
+     tangential velocity perpendicular to the object direction.
   5. Cap velocity and yaw with the sideways motion to keep the selected
-     sensor facing the surface.
+     sensor facing the surface while circling at a conservative speed.
   6. Stop translation on target loss; search briefly, then land on timeout.
 
 This is a reactive approximation of a potential-field / vector-field
@@ -45,16 +44,17 @@ from cflib.utils import uri_helper
 URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 
 FLIGHT_HEIGHT = 0.35        # meters, altitude above ground
-DESIRED_STANDOFF = 0.25     # meters, target orbit distance from object
+DESIRED_STANDOFF = 0.6      # meters, target orbit distance from object
 DETECTION_DISTANCE = 1.0   # meters, acquire a new target inside this distance
 MAX_SENSOR_RANGE = 2.0     # meters, ignore readings beyond this (no detection)
 MIN_SENSOR_RANGE = 0.05    # meters, ignore obviously invalid near-zero readings
 
-K_RADIAL = 0.8             # proportional gain, distance error -> radial speed
-ORBIT_SPEED = 0.15         # m/s, constant tangential (circling) speed
-MAX_SPEED = 0.3            # m/s, safety cap on total commanded speed
-SEARCH_YAW_RATE = 30       # deg/s, spin rate when no object is detected
-MAX_ORBIT_YAW_RATE = 45.0  # deg/s, cap yaw and matching tangential motion
+K_RADIAL = 0.6             # proportional gain, distance error -> radial speed
+ORBIT_SPEED = 0.15         # m/s, tangential (circling) speed
+RANGE_FILTER_ALPHA = 0.35  # EMA weight for each new target range reading
+MAX_SPEED = 0.25           # m/s, safety cap on total commanded speed
+SEARCH_YAW_RATE = 15       # deg/s, spin rate when no object is detected
+MAX_ORBIT_YAW_RATE = 15.0  # deg/s, cap yaw and matching tangential motion
 SEARCH_TIMEOUT = 12.0     # seconds without a target before landing
 TARGET_LOST_TIMEOUT = 0.5 # seconds to hover before releasing a lost target
 RANGE_TIMEOUT = 0.5       # seconds before telemetry is considered stale
@@ -162,6 +162,7 @@ class OrbitController:
         self.target_sensor = None
         self.last_seen = None
         self.search_started = None
+        self.filtered_range = None
 
     def command(self, ranges, now):
         if self.search_started is None:
@@ -175,7 +176,19 @@ class OrbitController:
                       f'{candidates[self.target_sensor]:.2f} m')
 
         if self.target_sensor is not None:
-            cmd = compute_velocity_command(ranges, self.target_sensor)
+            target_range = ranges.get(self.target_sensor)
+            if (target_range is not None and
+                    MIN_SENSOR_RANGE < target_range <= MAX_SENSOR_RANGE):
+                if self.filtered_range is None:
+                    self.filtered_range = target_range
+                else:
+                    self.filtered_range += RANGE_FILTER_ALPHA * (
+                        target_range - self.filtered_range)
+                control_ranges = dict(ranges)
+                control_ranges[self.target_sensor] = self.filtered_range
+            else:
+                control_ranges = ranges
+            cmd = compute_velocity_command(control_ranges, self.target_sensor)
             if cmd is not None:
                 self.last_seen = now
                 self.search_started = now
@@ -190,6 +203,7 @@ class OrbitController:
                 return 0.0, 0.0, 0.0
             print('Target lost; searching again.')
             self.target_sensor = None
+            self.filtered_range = None
 
         if now - self.search_started >= SEARCH_TIMEOUT:
             return None

@@ -34,7 +34,7 @@ class OrbitTests(unittest.TestCase):
         sample = orbit.read_ranges()
         self.assertEqual(sample, ranges(front=0.5))
         vx, vy, yaw = orbit.OrbitController().command(sample, 0.0)
-        self.assertAlmostEqual(vx, 0.0)
+        self.assertLess(vx, 0.0)
         self.assertGreater(vy, 0.0)
         self.assertLess(yaw, 0.0)
 
@@ -66,6 +66,20 @@ class OrbitTests(unittest.TestCase):
         self.assertEqual(controller.target_sensor, 'front')
         self.assertGreater(cmd[0], 0.0)
 
+    def test_target_range_is_smoothed(self):
+        controller = orbit.OrbitController()
+        controller.command(ranges(front=0.5), 0.0)
+        controller.command(ranges(front=0.9), 0.1)
+        self.assertAlmostEqual(
+            controller.filtered_range,
+            0.5 + orbit.RANGE_FILTER_ALPHA * (0.9 - 0.5))
+
+    def test_orbit_yaw_is_conservative_at_standoff(self):
+        _, _, yaw = orbit.OrbitController().command(
+            ranges(front=orbit.DESIRED_STANDOFF), 0.0)
+        self.assertLessEqual(abs(yaw), 15.0)
+        self.assertAlmostEqual(orbit.ORBIT_SPEED, 0.15)
+
     def test_loss_hovers_then_searches_and_reacquires(self):
         controller = orbit.OrbitController()
         controller.command(ranges(front=0.5), 0.0)
@@ -93,7 +107,7 @@ class OrbitTests(unittest.TestCase):
         controller = orbit.OrbitController()
         x, y, heading = -0.5, 0.0, 0.0
         dt = 0.01
-        for step in range(2200):
+        for step in range(3200):
             distance = math.hypot(x, y)
             bearing = math.atan2(-y, -x)
             error = math.atan2(math.sin(bearing - heading), math.cos(bearing - heading))
@@ -103,7 +117,8 @@ class OrbitTests(unittest.TestCase):
             y += (vx * math.sin(heading) + vy * math.cos(heading)) * dt
             heading += math.radians(yaw) * dt
         self.assertLess(heading, -2 * math.pi)
-        self.assertAlmostEqual(math.hypot(x, y), 0.5, delta=0.02)
+        self.assertAlmostEqual(
+            math.hypot(x, y), orbit.DESIRED_STANDOFF, delta=0.02)
 
     def test_stale_ranges_stop_motion_in_flight_loop(self):
         cf = MagicMock()
