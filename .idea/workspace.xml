@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Navigation Algorithm" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.6536818852940245" />
+      <entry key="MS500" value="6.4723875375947015" />
+      <entry key="S2" value="15.764811752195493" />
+      <entry key="S5" value="23.561611379280873" />
+      <entry key="S10" value="27.99348624705178" />
+      <entry key="S30" value="31.78690714326981" />
+      <entry key="S60" value="32.86444403932795" />
+      <entry key="M2" value="33.42475420793545" />
+      <entry key="M5" value="33.76808106388767" />
+      <entry key="M10" value="33.88373470051894" />
+      <entry key="M15" value="33.92242165922384" />
+      <entry key="M30" value="33.96117673001374" />
+      <entry key="H1" value="33.98369371754427" />
+      <entry key="H2" value="35.422848753733966" />
+      <entry key="H4" value="65.42817163008077" />
+      <entry key="D1" value="648.4885547752027" />
+      <entry key="W1" value="1304.2596562762735" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="1.14E-322" />
+      <entry key="M2" value="1.3595184739653822E-161" />
+      <entry key="M5" value="6.691791274350996E-65" />
+      <entry key="M10" value="1.1530051767695432E-32" />
+      <entry key="M15" value="6.425482477599929E-22" />
+      <entry key="M30" value="3.583480778657997E-11" />
+      <entry key="H1" value="8.464997090890136E-6" />
+      <entry key="H2" value="0.004114511816021642" />
+      <entry key="H4" value="0.09074297667022238" />
+      <entry key="D1" value="1.3701956144055938" />
+      <entry key="W1" value="2.6381096572910776" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.5981547265304419" />
+      <entry key="MS500" value="6.426790546811132" />
+      <entry key="S2" value="15.73463352430362" />
+      <entry key="S5" value="23.54173390372616" />
+      <entry key="S10" value="27.981165654600197" />
+      <entry key="S30" value="31.78210051971073" />
+      <entry key="S60" value="32.861939962391865" />
+      <entry key="M2" value="33.423475862695554" />
+      <entry key="M5" value="33.76756326395504" />
+      <entry key="M10" value="33.88347471099571" />
+      <entry key="M15" value="33.92224808981069" />
+      <entry key="M30" value="33.96108982357479" />
+      <entry key="H1" value="33.983658693017446" />
+      <entry key="H2" value="35.42694011919813" />
+      <entry key="H4" value="65.5188881824785" />
+      <entry key="D1" value="649.8586863974845" />
+      <entry key="W1" value="1306.897742171453" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 5
+}</component>
+  <component name="ProjectId" id="3JSv9YA3vvnU9MJsyi8CjjWASFB" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.hop.executor&quot;: &quot;Run&quot;,
+    &quot;Python.orbit_prototype.executor&quot;: &quot;Run&quot;,
+    &quot;Python.reactive_nav.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;test__drone__flight&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="Python.reactive_nav">
+    <configuration name="hop" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="amaze-autonomous-drone" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.13" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/algorithms" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/algorithms/hop.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="reactive_nav" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="amaze-autonomous-drone" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.13" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/algorithms" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/algorithms/reactive_nav.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Testing PyCharm UI push" />
+      <created>1789667132216</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1789667132216</updated>
+    </task>
+    <task id="LOCAL-00001" summary="Navigation Algorithm">
+      <option name="closed" value="true" />
+      <created>1789743634779</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1789743634779</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Navigation Algorithm">
+      <option name="closed" value="true" />
+      <created>1789749001743</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1789749001743</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Testing PyCharm UI push" />
+    <MESSAGE value="Navigation Algorithm" />
+    <option name="LAST_COMMIT_MESSAGE" value="Navigation Algorithm" />
+  </component>
+</project>
