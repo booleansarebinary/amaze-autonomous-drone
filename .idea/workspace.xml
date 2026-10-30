@@ -4,9 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
+<<<<<<< HEAD
     <list default="true" id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Navigation Algorithm">
       <change beforePath="$PROJECT_DIR$/algorithms/orbit.py" beforeDir="false" afterPath="$PROJECT_DIR$/algorithms/orbit.py" afterDir="false" />
     </list>
+=======
+    <list default="true" id="447965e0-e1d5-467c-9075-b7a74040e99b" name="Changes" comment="Navigation Algorithm" />
+>>>>>>> 3e4e4dc307b5f2c94d6bd7aec64e244fa06d4745
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -106,7 +110,7 @@
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;sarah&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;MAIN__orbit__tau__ceti&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
