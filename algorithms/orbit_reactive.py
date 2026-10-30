@@ -66,12 +66,11 @@ _latest_ranges = {'front': None, 'back': None, 'left': None, 'right': None}
 
 
 def _range_callback(timestamp, data, logconf):
-    # Multi-ranger log values are in meters already in recent firmware;
-    # if your firmware reports mm, divide by 1000 here instead.
+    # Multi-ranger reports distances in millimeters; the controller uses meters.
     for key in ('front', 'back', 'left', 'right'):
         val = data.get(f'range.{key}')
         if val is not None:
-            _latest_ranges[key] = val
+            _latest_ranges[key] = val / 1000.0
 
 
 def start_range_logging(scf):
