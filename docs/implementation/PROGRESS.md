@@ -47,15 +47,17 @@ No replacement instances created. Orchestrator owns briefs, progress, reports an
 | Keep strict Chunk 8 gate: zero violations and planner mean exceeds every baseline | Orchestrator, Validator review | 0 | Design §17 wins over weaker "or explain why" wording |
 | Do not use existing generic root Docker files for mission tests | Victor | 0 | Preserve teammates' environment; root Python 3.9 conflicts with repository Python 3.10 target |
 | Reject a no-op commander facade as the passive zero-call solution | Orchestrator, Builder review | 0 | Suppressing transmission still invokes a commander method; preserve Victor's literal zero-call guarantee |
+| Approve `HIT` / `NO_RETURN` / `INVALID` range outcomes; only `NO_RETURN` marks free space | Victor | 1 | Explicit answer to checkpoint decision 3; physical sentinel interpretation remains a Stage A gate |
+| Reject nonfinite JSON values with a reason; encode unavailable values as null plus reason | Orchestrator | 1 | Strict JSON and visible data-quality errors without silently laundering invalid numeric values |
 
 No Builder/Validator test disputes have occurred.
 
 ## Open questions
 
-See numbered decisions 1–8 in `chunk_0_report.md`: Sarah adaptation; hardware inventory; HIT/NO_RETURN/INVALID contract before Chunk 1; layout spacing; colony-loss threshold and box enclosure; width-refinement scoring; emergency priorities and fallback landing; passive disconnect, velocity source and radio ownership. No unresolved behavior will be implemented by assumption. Physical checks remain Victor-only.
+See numbered decisions 1–2, 4–8 in `chunk_0_report.md`: Sarah adaptation; hardware inventory; layout spacing; colony-loss threshold and box enclosure; width-refinement scoring; emergency priorities and fallback landing; passive disconnect, velocity source and radio ownership. Chunk 1 range outcome semantics are resolved in `chunk_1_brief.md`; physical checks remain Victor-only.
 
 ## Current boundary
 
 Chunk 0 report: `chunk_0_report.md`; approved commit: `cde04f8633c511af0e7cd8ca611c13f040f022da`.
 
-Chunk 0 was pushed after approval. Chunk 1 is in progress. Range outcome semantics remain open; implement independent foundations while awaiting Victor's answer, and do not finalize `RangeReading` behavior without it. Persistent agents remain available for reuse.
+Chunk 0 was pushed after approval. Chunk 1 is in progress. Victor approved the three range outcomes; sentinel meaning still awaits Stage A evidence. Persistent agents remain available for reuse.
