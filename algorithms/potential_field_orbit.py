@@ -20,7 +20,7 @@ Each control cycle:
      ANGULAR rate around the object stays roughly constant --
      this prevents overturning when the drone is closer than the
      desired standoff, and under-turning when it's farther away.
-  5. Sum radial + tangential, cap the magnitude, send as a body-frame
+  5. Sum radial + tangential, cap the magnitude, and send it as a body-frame
      velocity setpoint.
   6. If no sensor sees anything, spin slowly in place to search.
 
@@ -48,6 +48,8 @@ FLIGHT_HEIGHT = 0.4        # meters, altitude above ground
 DESIRED_STANDOFF = 0.5     # meters, target orbit distance from object
 MAX_SENSOR_RANGE = 2.0     # meters, ignore readings beyond this (no detection)
 MIN_SENSOR_RANGE = 0.05    # meters, ignore obviously invalid near-zero readings
+RANGE_TIMEOUT = 0.35       # seconds; never fly on an old range sample
+RANGE_STARTUP_TIMEOUT = 3.0  # seconds; abort before takeoff if deck is silent
 
 K_RADIAL = 0.8             # proportional gain, distance error -> radial speed
 
@@ -73,14 +75,21 @@ SENSOR_DIRECTIONS = {
 }
 
 _latest_ranges = {'front': None, 'back': None, 'left': None, 'right': None}
+_last_range_update = None
 
 
 def _range_callback(timestamp, data, logconf):
     # Multi-ranger reports distances in millimeters; the controller uses meters.
+    global _last_range_update
+    received_at = time.monotonic()
+    received_range = False
     for key in ('front', 'back', 'left', 'right'):
         val = data.get(f'range.{key}')
         if val is not None:
             _latest_ranges[key] = val / 1000.0
+            received_range = True
+    if received_range:
+        _last_range_update = received_at
 
 
 def start_range_logging(scf):
@@ -97,8 +106,18 @@ def rotate90_ccw(x, y):
     return (-y, x)
 
 
-def compute_velocity_command():
-    """Reactive potential-field control: returns (vx, vy) in body frame."""
+def has_fresh_range_data(now=None):
+    """True only when the Multi-ranger has updated recently."""
+    if now is None:
+        now = time.monotonic()
+    return _last_range_update is not None and now - _last_range_update <= RANGE_TIMEOUT
+
+
+def compute_velocity_command(now=None):
+    """Return a safe body-frame (vx, vy), or ``None`` if no target is fresh."""
+    if not has_fresh_range_data(now):
+        return None
+
     valid = {
         k: v for k, v in _latest_ranges.items()
         if v is not None and MIN_SENSOR_RANGE < v < MAX_SENSOR_RANGE
@@ -142,7 +161,19 @@ def compute_velocity_command():
         vx *= scale
         vy *= scale
 
+    # send_hover_setpoint() accepts x/y velocity in body-fixed coordinates,
+    # which is the same frame used by the Multi-ranger directions above.
     return vx, vy
+
+
+def wait_for_range_data(timeout=RANGE_STARTUP_TIMEOUT):
+    """Wait for the deck to prove it is logging before the motors are armed."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if has_fresh_range_data():
+            return True
+        time.sleep(0.05)
+    return False
 
 
 def send_hover(cf, vx, vy, yawrate, z):
@@ -188,25 +219,37 @@ def main():
 
         print('Starting range sensor logging...')
         log_config = start_range_logging(scf)
-        time.sleep(0.5)  # let a few readings come in
-
+        airborne = False
         try:
-            cf.platform.send_arming_request(True)
-            time.sleep(1.0)
-        except Exception as e:
-            print(f'Arming request skipped/failed: {e}')
+            if not wait_for_range_data():
+                raise RuntimeError(
+                    'No Multi-ranger telemetry received. Refusing to take off; '
+                    'check that the deck is fitted, enabled, and its firmware '
+                    'exports range.front/back/left/right.'
+                )
+            print(f'Multi-ranger active (m): {_latest_ranges}')
 
-        print('Taking off...')
-        takeoff(cf, FLIGHT_HEIGHT)
+            try:
+                cf.platform.send_arming_request(True)
+                time.sleep(1.0)
+            except Exception as exc:
+                # Older firmware may not expose the arming service.
+                print(f'Arming request skipped/failed: {exc}')
 
-        print('Searching for object and orbiting...')
-        run_orbit(cf, ORBIT_DURATION)
+            print('Taking off...')
+            takeoff(cf, FLIGHT_HEIGHT)
+            airborne = True
 
-        print('Landing...')
-        land(cf, FLIGHT_HEIGHT)
+            print('Searching for object and orbiting...')
+            run_orbit(cf, ORBIT_DURATION)
+        finally:
+            # Also covers Ctrl-C and a logging/control exception after lift-off.
+            if airborne:
+                print('Landing...')
+                land(cf, FLIGHT_HEIGHT)
+            cf.commander.send_stop_setpoint()
+            log_config.stop()
 
-        cf.commander.send_stop_setpoint()
-        log_config.stop()
         print('Done.')
 
 

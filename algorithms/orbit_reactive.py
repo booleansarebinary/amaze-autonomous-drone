@@ -93,7 +93,7 @@ def compute_velocity_command():
         k: v for k, v in _latest_ranges.items()
         if v is not None and MIN_SENSOR_RANGE < v < MAX_SENSOR_RANGE
     }
-
+    print(valid)
     if not valid:
         return None  # nothing detected
 
@@ -152,8 +152,10 @@ def run_orbit(cf, duration, hz=CONTROL_HZ):
 
         if cmd is None:
             # No object detected -- spin in place to search for one.
+            print("nothing found, searching")
             send_hover(cf, 0.0, 0.0, SEARCH_YAW_RATE, FLIGHT_HEIGHT)
         else:
+            print("found, sending command ", cmd)
             vx, vy = cmd
             send_hover(cf, vx, vy, 0.0, FLIGHT_HEIGHT)
 
