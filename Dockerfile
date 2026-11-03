@@ -1,5 +1,5 @@
 # 1. Start with a standard Python base image
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # 2. Copy the official uv executable directly into your image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -25,4 +25,4 @@ RUN uv sync --frozen
 
 # 9. Expose port and run the app using 'uv run'
 EXPOSE 8080
-CMD ["uv", "run", "python", "-m", "myapp"]
+CMD ["uv", "run", "python", "main.py"]
