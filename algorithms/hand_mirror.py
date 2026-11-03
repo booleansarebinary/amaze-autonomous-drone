@@ -9,6 +9,8 @@ jitters most, since a hand is never perfectly still and a wall is. This is a pro
 position tracking, but for slow, roughly axis-aligned hand motion it feels
 like mirroring.
 
+If the drone climbs above KILL_HEIGHT it stops following and lands.
+
 Press Ctrl-C to land and exit
 """
 import logging
@@ -41,8 +43,7 @@ JUMP_REJECT = 0.3           # (m) a jump bigger than this in one tick means the 
 FILTER_ALPHA = 0.5          # 0..1, weight of each new distance reading (higher = less smoothing)
 RATE_ALPHA = 0.3            # 0..1, weight of each new rate-of-change estimate
 MIN_HEIGHT = 0.2            # (m) never command a descent below this height
-MAX_HEIGHT = 1.0            # (m) never command an ascent above this height
-DESCEND_ABOVE_HEIGHT = 0.7  # (m) a hand above can only push the drone down above this
+KILL_HEIGHT = 3.5           # (m) above this, stop following and land
 SAFE_CLEARANCE = 0.35       # (m) don't move toward an obstacle closer than this
 LIVELINESS_WINDOW = 1.0     # (s) how much rate history to measure jitter over
 SWITCH_RATIO = 2.0          # another track must jitter this many times more to steal the target
@@ -157,7 +158,7 @@ class HandFollower:
         for name, measured in readings.items():
             self.tracks[name].update(measured, dt)
         self.target = choose_target(self.tracks, self.target)
-        return compute_velocities(self.tracks, self.target, front, left, height, back, right)
+        return compute_velocities(self.tracks, self.target, front, left, height, back, right, up)
 
 
 def choose_target(tracks, current):
@@ -182,19 +183,17 @@ def choose_target(tracks, current):
     return current
 
 
-def compute_velocities(tracks, target, front, left, height=None, back=None, right=None):
+def compute_velocities(tracks, target, front, left, height=None, back=None, right=None, up=None):
     """One control tick: hand tracks, the target name and raw ranger readings in, a body-frame velocity out.
 
     Only the target track moves the drone, along its axis (see SENSOR_AXES):
     a hand moving away in front pulls the drone forward, behind pulls it
-    backward, and likewise left/right. For the up sensor, a growing distance
-    means the hand moved up, so follow it upward. A hand close above only
-    pushes the drone down while it is higher than DESCEND_ABOVE_HEIGHT.
+    backward, and likewise left/right. The up sensor works the same way:
+    a hand moving up pulls the drone up, a hand coming down pushes it down.
 
-    height (optional) is the down-ranger reading; descent is dropped below
-    MIN_HEIGHT (and below DESCEND_ABOVE_HEIGHT, or when height is unknown)
-    and ascent above MAX_HEIGHT. back/right are optional so the
-    drone still works with only front/left/up.
+    height (optional) is the down-ranger reading; descent is dropped at
+    MIN_HEIGHT. Too high is handled by landing (see KILL_HEIGHT in main).
+    back/right are optional so the drone still works with only front/left/up.
     """
     velocity = {'x': 0.0, 'y': 0.0, 'z': 0.0}
     if target is not None:
@@ -202,23 +201,20 @@ def compute_velocities(tracks, target, front, left, height=None, back=None, righ
         velocity[axis] = track_velocity(tracks[target], sign)
     vx, vy, vz = velocity['x'], velocity['y'], velocity['z']
 
-    # Only climb, unless the drone is high enough that descending is safe.
-    if vz < 0 and (height is None or height <= DESCEND_ABOVE_HEIGHT):
+    # Don't descend below MIN_HEIGHT above whatever is below.
+    if height is not None and height <= MIN_HEIGHT and vz < 0:
         vz = 0.0
 
-    # Keep the drone between MIN_HEIGHT and MAX_HEIGHT above whatever is below.
-    if height is not None:
-        if (height <= MIN_HEIGHT and vz < 0) or (height >= MAX_HEIGHT and vz > 0):
-            vz = 0.0
-
     # Don't move toward anything too close on the side we're heading for.
+    # Downward clearance is covered by MIN_HEIGHT above.
     vx = respect_clearance(vx, front, back)
     vy = respect_clearance(vy, left, right)
+    vz = respect_clearance(vz, up, None)
     return vx, vy, vz
 
 
 def limit_climb_rate(vz, commanded_z):
-    """Limit vz so the commanded height stays within [MIN_HEIGHT, MAX_HEIGHT].
+    """Limit vz so the commanded height never drops below MIN_HEIGHT.
 
     MotionCommander turns vz into a height setpoint that keeps integrating,
     and the drone lags behind that setpoint. Checking the *measured* height
@@ -227,8 +223,7 @@ def limit_climb_rate(vz, commanded_z):
     itself, over the next tick.
     """
     lowest = (MIN_HEIGHT - commanded_z) / LOOP_DT
-    highest = (MAX_HEIGHT - commanded_z) / LOOP_DT
-    vz = max(lowest, min(highest, vz))
+    vz = max(lowest, vz)
     return max(-MAX_VELOCITY, min(MAX_VELOCITY, vz))
 
 
@@ -257,16 +252,22 @@ def main(argv=None):
                     while True:
                         now = time.time()
                         dt = now - last_time
+                        # The down ranger only reads to ~4 m, so also check
+                        # the integrated setpoint in case it reads None.
+                        height = multi_ranger.down
+                        commanded_z += last_vz * dt
+                        if (height is not None and height > KILL_HEIGHT) or commanded_z > KILL_HEIGHT:
+                            print('Above %.1f m, landing...' % KILL_HEIGHT)
+                            break
                         vx, vy, vz = follower.step(
                             dt,
                             multi_ranger.front,
                             multi_ranger.left,
                             multi_ranger.up,
-                            height=multi_ranger.down,
+                            height=height,
                             back=multi_ranger.back,
                             right=multi_ranger.right,
                         )
-                        commanded_z += last_vz * dt
                         vz = limit_climb_rate(vz, commanded_z)
                         motion_commander.start_linear_motion(vx, vy, vz)
                         last_vz, last_time = vz, now
