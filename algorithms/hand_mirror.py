@@ -1,18 +1,21 @@
 """
-Hand-mirroring demo for the Crazyflie 2.x using the Flow deck + Multiranger deck.
+Hand-mirroring for the Crazyflie 2.x using the Flow deck + Multiranger deck.
 
-This program keeps the drone trying to hold a fixed TARGET_DISTANCE from your hand
-on each axis (front/back, left/right, up). Move your hand further away on
-an axis -> the drone follows to close the gap. Move it closer -> the drone
-backs off. This is a proportional "leash" controller, not true absolute
+This program keeps the drone trying to hold a fixed TARGET_DISTANCE from your hand,
+seen by one of the front/back/left/right/up rangers. Move your hand further
+away -> the drone follows to close the gap. Move it closer -> the drone
+backs off. Only one ranger is followed at a time: the one whose reading
+jitters most, since a hand is never perfectly still and a wall is. This is a proportional "leash" controller, not true absolute
 position tracking, but for slow, roughly axis-aligned hand motion it feels
 like mirroring.
 
 Press Ctrl-C to land and exit
 """
 import logging
+import statistics
 import sys
 import time
+from collections import deque
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -41,6 +44,19 @@ MIN_HEIGHT = 0.2            # (m) never command a descent below this height
 MAX_HEIGHT = 1.0            # (m) never command an ascent above this height
 DESCEND_ABOVE_HEIGHT = 0.7  # (m) a hand above can only push the drone down above this
 SAFE_CLEARANCE = 0.35       # (m) don't move toward an obstacle closer than this
+LIVELINESS_WINDOW = 1.0     # (s) how much rate history to measure jitter over
+SWITCH_RATIO = 2.0          # another track must jitter this many times more to steal the target
+MIN_LIVELINESS = 0.0005     # (m/s)^2 rate variance below this is too still to be a hand
+
+# Which axis each ranger drives, and the sign that makes "gap growing" mean
+# "move toward it". Positive x is forward, positive y is left, positive z is up.
+SENSOR_AXES = {
+    'front': ('x', 1.0),
+    'back': ('x', -1.0),
+    'left': ('y', 1.0),
+    'right': ('y', -1.0),
+    'up': ('z', 1.0),
+}
 
 
 class HandTrack:
@@ -55,15 +71,25 @@ class HandTrack:
     def __init__(self):
         self.distance = None  # filtered distance while locked, else None
         self.rate = 0.0       # filtered d(distance)/dt, m/s
+        self.rates = deque(maxlen=max(2, round(LIVELINESS_WINDOW / LOOP_DT)))
 
     @property
     def locked(self):
         return self.distance is not None
 
+    @property
+    def liveliness(self):
+        """Variance of rate over the last LIVELINESS_WINDOW: high for a hand, ~0 for a wall."""
+        if len(self.rates) < 2:
+            return 0.0
+        return statistics.pvariance(self.rates)
+
     def update(self, measured, dt):
         if not self.locked:
             if measured is not None and MIN_DETECT_DISTANCE <= measured <= MAX_DETECT_DISTANCE:
                 self.distance, self.rate = measured, 0.0
+                self.rates.clear()
+                self.rates.append(self.rate)
             return
 
         if measured is None or measured > LOST_DISTANCE:
@@ -81,6 +107,7 @@ class HandTrack:
         if dt > 0:
             new_rate = (self.distance - previous) / dt
             self.rate += RATE_ALPHA * (new_rate - self.rate)
+        self.rates.append(self.rate)
 
 
 def track_velocity(track, sign=1.0):
@@ -109,22 +136,6 @@ def track_velocity(track, sign=1.0):
     return max(-MAX_VELOCITY, min(MAX_VELOCITY, velocity))
 
 
-def axis_velocity(positive, negative):
-    """Velocity along one axis from the two opposite-facing sensor tracks.
-
-    positive is the track facing the +axis direction (front or left),
-    negative the one facing the -axis direction (back or right). Only the
-    nearer locked track is followed, since that is most likely the hand;
-    following both would make the drone settle midway between your hand and
-    whatever is on the other side.
-    """
-    if positive.locked and (not negative.locked or positive.distance <= negative.distance):
-        return track_velocity(positive)
-    if negative.locked:
-        return track_velocity(negative, sign=-1.0)
-    return 0.0
-
-
 def respect_clearance(velocity, positive, negative):
     """Cancel motion toward an obstacle closer than SAFE_CLEARANCE."""
     if velocity > 0 and positive is not None and positive < SAFE_CLEARANCE:
@@ -135,37 +146,61 @@ def respect_clearance(velocity, positive, negative):
 
 
 class HandFollower:
-    """Holds one HandTrack per ranger and turns readings into velocities."""
+    """Holds one HandTrack per ranger, picks a single target and turns readings into velocities."""
 
     def __init__(self):
-        self.tracks = {name: HandTrack() for name in ('front', 'back', 'left', 'right', 'up')}
+        self.tracks = {name: HandTrack() for name in SENSOR_AXES}
+        self.target = None  # name of the track being followed, or None
 
     def step(self, dt, front, left, up, height=None, back=None, right=None):
         readings = {'front': front, 'back': back, 'left': left, 'right': right, 'up': up}
         for name, measured in readings.items():
             self.tracks[name].update(measured, dt)
-        return compute_velocities(self.tracks, front, left, height, back, right)
+        self.target = choose_target(self.tracks, self.target)
+        return compute_velocities(self.tracks, self.target, front, left, height, back, right)
 
 
-def compute_velocities(tracks, front, left, height=None, back=None, right=None):
-    """One control tick: hand tracks plus raw ranger readings in, a body-frame velocity out.
+def choose_target(tracks, current):
+    """Pick the one track to follow: the liveliest locked one.
 
-    x-axis: front/back sensors. Positive x is forward, so a hand moving away
-            in front pulls the drone forward, and a hand moving away behind
-            pulls it backward.
-    y-axis: left/right sensors. Positive y is left in the body frame.
-    z-axis: the up sensor; a growing distance above means the hand moved up,
-            so follow it upward. A hand close above only pushes the drone
-            down while it is higher than DESCEND_ABOVE_HEIGHT.
+    Following every locked ranger at once makes the drone hold distance from
+    walls and furniture too, and settle somewhere between them and the hand.
+    A hand jitters, a wall doesn't, so prefer the track whose rate varies
+    most, and ignore anything stiller than MIN_LIVELINESS so a lone wall is
+    never followed. The current target is kept unless it is lost or another
+    track is SWITCH_RATIO times livelier, so two similar tracks don't make it flip.
+    """
+    lively = [name for name, track in tracks.items()
+              if track.locked and track.liveliness >= MIN_LIVELINESS]
+    if not lively:
+        return None
+    best = max(lively, key=lambda name: tracks[name].liveliness)
+    if current not in lively:
+        return best
+    if tracks[best].liveliness > SWITCH_RATIO * tracks[current].liveliness:
+        return best
+    return current
+
+
+def compute_velocities(tracks, target, front, left, height=None, back=None, right=None):
+    """One control tick: hand tracks, the target name and raw ranger readings in, a body-frame velocity out.
+
+    Only the target track moves the drone, along its axis (see SENSOR_AXES):
+    a hand moving away in front pulls the drone forward, behind pulls it
+    backward, and likewise left/right. For the up sensor, a growing distance
+    means the hand moved up, so follow it upward. A hand close above only
+    pushes the drone down while it is higher than DESCEND_ABOVE_HEIGHT.
 
     height (optional) is the down-ranger reading; descent is dropped below
     MIN_HEIGHT (and below DESCEND_ABOVE_HEIGHT, or when height is unknown)
     and ascent above MAX_HEIGHT. back/right are optional so the
     drone still works with only front/left/up.
     """
-    vx = axis_velocity(tracks['front'], tracks['back'])
-    vy = axis_velocity(tracks['left'], tracks['right'])
-    vz = track_velocity(tracks['up'])
+    velocity = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+    if target is not None:
+        axis, sign = SENSOR_AXES[target]
+        velocity[axis] = track_velocity(tracks[target], sign)
+    vx, vy, vz = velocity['x'], velocity['y'], velocity['z']
 
     # Only climb, unless the drone is high enough that descending is safe.
     if vz < 0 and (height is None or height <= DESCEND_ABOVE_HEIGHT):
