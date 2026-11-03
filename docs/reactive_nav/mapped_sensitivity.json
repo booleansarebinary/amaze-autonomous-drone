@@ -1,0 +1,1300 @@
+{
+  "metadata": {
+    "trials_per_seed": 100,
+    "seeds": [
+      81
+    ],
+    "dt": 0.06666666666666667,
+    "tau": 0.75,
+    "sensor_delay": 0.2,
+    "random_yaw": true,
+    "radius": 0.09,
+    "time_limit": 120,
+    "ranger": "continuous cone",
+    "controller_sha256": "ee5accef34ee47a5c593ac772b2a01bfdf0f3f5adcac6a91cb68d5a932765162",
+    "baseline_sha256": null
+  },
+  "after_sim": {
+    "fixed": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 14.7333333333333,
+        "min_clearance": 0.46372575892363865,
+        "path_length": 3.8462742410763613,
+        "path_ratio": 1.0121774318622003
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 22.333333333333275,
+        "min_clearance": 0.07031520204618888,
+        "path_length": 5.5131149164480515,
+        "path_ratio": 1.4508197148547504
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 27.26666666666659,
+        "min_clearance": 0.07425370451751764,
+        "path_length": 7.145666464168835,
+        "path_ratio": 1.7864166160422088
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 21.199999999999946,
+        "min_clearance": 0.06645303127274124,
+        "path_length": 5.696729600872118,
+        "path_ratio": 1.4991393686505574
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 23.133333333333272,
+        "min_clearance": 0.09890099827368509,
+        "path_length": 5.150938028134226,
+        "path_ratio": 2.06037521125369
+      }
+    },
+    "random": {
+      "reached": 100,
+      "collided": 0,
+      "timeout": 0
+    },
+    "failures": [],
+    "trials": [
+      {
+        "seed": 81,
+        "trial": 0,
+        "initial_yaw": 2.1788483919270925,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.266666666666632,
+        "min_clearance": 0.36351606998023633,
+        "path_length": 4.048049296404811,
+        "path_ratio": 1.0116601243749699
+      },
+      {
+        "seed": 81,
+        "trial": 1,
+        "initial_yaw": 1.995221082678757,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.399999999999965,
+        "min_clearance": 0.23311211430975196,
+        "path_length": 4.059283175248011,
+        "path_ratio": 1.013690203473563
+      },
+      {
+        "seed": 81,
+        "trial": 2,
+        "initial_yaw": -2.939548719535625,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.79999999999996,
+        "min_clearance": 0.09446735116907815,
+        "path_length": 4.43844530979779,
+        "path_ratio": 1.0118304166794083
+      },
+      {
+        "seed": 81,
+        "trial": 3,
+        "initial_yaw": 1.3951652563570216,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.399999999999952,
+        "min_clearance": 0.04167050408775272,
+        "path_length": 5.121437057986352,
+        "path_ratio": 1.1173829627743301
+      },
+      {
+        "seed": 81,
+        "trial": 4,
+        "initial_yaw": -2.1066742588360934,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.33333333333329,
+        "min_clearance": 0.0982879335645932,
+        "path_length": 4.926304043983341,
+        "path_ratio": 1.230147168849668
+      },
+      {
+        "seed": 81,
+        "trial": 5,
+        "initial_yaw": 0.8780947162715611,
+        "arrived": true,
+        "collided": false,
+        "duration": 24.8666666666666,
+        "min_clearance": 0.07067443392921899,
+        "path_length": 6.000076892102403,
+        "path_ratio": 1.4912304307556503
+      },
+      {
+        "seed": 81,
+        "trial": 6,
+        "initial_yaw": -0.9201615120134756,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.66666666666663,
+        "min_clearance": 0.3660389295139507,
+        "path_length": 4.207865409165883,
+        "path_ratio": 1.017164439248475
+      },
+      {
+        "seed": 81,
+        "trial": 7,
+        "initial_yaw": 2.810737307272757,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.46666666666662,
+        "min_clearance": 0.13519776956295224,
+        "path_length": 4.744334812082167,
+        "path_ratio": 1.0898339535874353
+      },
+      {
+        "seed": 81,
+        "trial": 8,
+        "initial_yaw": 2.099908233686944,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.733333333333288,
+        "min_clearance": 0.10174585346505971,
+        "path_length": 4.864987221049326,
+        "path_ratio": 1.1988003508468483
+      },
+      {
+        "seed": 81,
+        "trial": 9,
+        "initial_yaw": 2.308341464701718,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.933333333333294,
+        "min_clearance": 0.06452720813813964,
+        "path_length": 4.512300903323481,
+        "path_ratio": 1.1110758500369455
+      },
+      {
+        "seed": 81,
+        "trial": 10,
+        "initial_yaw": 0.7264153173806693,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.333333333333282,
+        "min_clearance": 0.04342403053732022,
+        "path_length": 5.290963700938402,
+        "path_ratio": 1.3181637850016212
+      },
+      {
+        "seed": 81,
+        "trial": 11,
+        "initial_yaw": -0.8716747010276221,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.533333333333296,
+        "min_clearance": 0.11230059025498385,
+        "path_length": 4.4359193081159525,
+        "path_ratio": 1.0108931805400614
+      },
+      {
+        "seed": 81,
+        "trial": 12,
+        "initial_yaw": -3.120142511537072,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.33333333333329,
+        "min_clearance": 0.13681766928473307,
+        "path_length": 4.809835788140077,
+        "path_ratio": 1.1888856556468745
+      },
+      {
+        "seed": 81,
+        "trial": 13,
+        "initial_yaw": -1.8281379098403368,
+        "arrived": true,
+        "collided": false,
+        "duration": 21.999999999999943,
+        "min_clearance": 0.05275780354053192,
+        "path_length": 5.512406047419546,
+        "path_ratio": 1.3656797420585665
+      },
+      {
+        "seed": 81,
+        "trial": 14,
+        "initial_yaw": -2.4645474329366746,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.399999999999963,
+        "min_clearance": 0.11239615179648774,
+        "path_length": 4.370951418742939,
+        "path_ratio": 1.0363666637229307
+      },
+      {
+        "seed": 81,
+        "trial": 15,
+        "initial_yaw": 1.4404849924487007,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.06666666666663,
+        "min_clearance": 0.17444833277948543,
+        "path_length": 4.291075094877867,
+        "path_ratio": 1.0139447995892978
+      },
+      {
+        "seed": 81,
+        "trial": 16,
+        "initial_yaw": 1.667018881979989,
+        "arrived": true,
+        "collided": false,
+        "duration": 25.533333333333264,
+        "min_clearance": 0.0689551477640292,
+        "path_length": 6.364895828394982,
+        "path_ratio": 1.5139494734757157
+      },
+      {
+        "seed": 81,
+        "trial": 17,
+        "initial_yaw": -2.477303557877678,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.066666666666627,
+        "min_clearance": 0.08260884057101298,
+        "path_length": 4.541141958048955,
+        "path_ratio": 1.032758347178678
+      },
+      {
+        "seed": 81,
+        "trial": 18,
+        "initial_yaw": -1.2718232325662269,
+        "arrived": true,
+        "collided": false,
+        "duration": 30.399999999999913,
+        "min_clearance": 0.09172202037843169,
+        "path_length": 7.413621177116857,
+        "path_ratio": 1.8277384253401794
+      },
+      {
+        "seed": 81,
+        "trial": 19,
+        "initial_yaw": 2.3619903190218454,
+        "arrived": true,
+        "collided": false,
+        "duration": 21.13333333333328,
+        "min_clearance": 0.08489959665841529,
+        "path_length": 5.751548814358678,
+        "path_ratio": 1.399535818264353
+      },
+      {
+        "seed": 81,
+        "trial": 20,
+        "initial_yaw": 2.800847443849939,
+        "arrived": true,
+        "collided": false,
+        "duration": 21.066666666666613,
+        "min_clearance": 0.09131047670554335,
+        "path_length": 5.042613175394449,
+        "path_ratio": 1.2593999058725356
+      },
+      {
+        "seed": 81,
+        "trial": 21,
+        "initial_yaw": 0.6440496280612711,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.799999999999963,
+        "min_clearance": 0.18029084339080473,
+        "path_length": 4.124308869196257,
+        "path_ratio": 1.014429341240853
+      },
+      {
+        "seed": 81,
+        "trial": 22,
+        "initial_yaw": 2.117995543965345,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.933333333333296,
+        "min_clearance": 0.11282713623398338,
+        "path_length": 4.181858682042642,
+        "path_ratio": 1.0454634959725826
+      },
+      {
+        "seed": 81,
+        "trial": 23,
+        "initial_yaw": -1.6088524274490987,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.39999999999996,
+        "min_clearance": 0.10481483000896291,
+        "path_length": 4.559033277121958,
+        "path_ratio": 1.093206918123304
+      },
+      {
+        "seed": 81,
+        "trial": 24,
+        "initial_yaw": -1.579488279881385,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.79999999999996,
+        "min_clearance": 0.10855179587984626,
+        "path_length": 4.3450860167275245,
+        "path_ratio": 1.0165669846244818
+      },
+      {
+        "seed": 81,
+        "trial": 25,
+        "initial_yaw": 2.7592872501905044,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.46666666666663,
+        "min_clearance": 0.08264493337036635,
+        "path_length": 4.312886900386591,
+        "path_ratio": 1.0642961507557736
+      },
+      {
+        "seed": 81,
+        "trial": 26,
+        "initial_yaw": 2.251166248011689,
+        "arrived": true,
+        "collided": false,
+        "duration": 35.20000000000007,
+        "min_clearance": 0.0941042351258071,
+        "path_length": 9.852297779901125,
+        "path_ratio": 2.1957411313718485
+      },
+      {
+        "seed": 81,
+        "trial": 27,
+        "initial_yaw": 0.6664300098546138,
+        "arrived": true,
+        "collided": false,
+        "duration": 40.933333333333685,
+        "min_clearance": 0.11709730330276241,
+        "path_length": 11.95482789608536,
+        "path_ratio": 2.6072615611904126
+      },
+      {
+        "seed": 81,
+        "trial": 28,
+        "initial_yaw": 3.1367522969060375,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.199999999999964,
+        "min_clearance": 0.24964490710640055,
+        "path_length": 4.283840802752681,
+        "path_ratio": 1.0259820140227895
+      },
+      {
+        "seed": 81,
+        "trial": 29,
+        "initial_yaw": -3.0435534083545326,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.799999999999947,
+        "min_clearance": 0.09834875220379441,
+        "path_length": 4.948324548946168,
+        "path_ratio": 1.1414529045399482
+      },
+      {
+        "seed": 81,
+        "trial": 30,
+        "initial_yaw": -0.4703351350761801,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.533333333333296,
+        "min_clearance": 0.0832369262732722,
+        "path_length": 4.28524267793044,
+        "path_ratio": 1.069246602700101
+      },
+      {
+        "seed": 81,
+        "trial": 31,
+        "initial_yaw": -1.8656603147820046,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.599999999999948,
+        "min_clearance": 0.09612906544299205,
+        "path_length": 4.657742903413114,
+        "path_ratio": 1.1390516051413004
+      },
+      {
+        "seed": 81,
+        "trial": 32,
+        "initial_yaw": 0.4455984575571802,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.666666666666625,
+        "min_clearance": 0.15383793891388997,
+        "path_length": 4.150624210422116,
+        "path_ratio": 1.0314739884730584
+      },
+      {
+        "seed": 81,
+        "trial": 33,
+        "initial_yaw": 0.7137441498618657,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.933333333333296,
+        "min_clearance": 0.3673322440771124,
+        "path_length": 4.279643985769652,
+        "path_ratio": 1.014026554569101
+      },
+      {
+        "seed": 81,
+        "trial": 34,
+        "initial_yaw": -1.086607082391739,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.66666666666663,
+        "min_clearance": 0.3664902674020548,
+        "path_length": 4.203135573645627,
+        "path_ratio": 1.02098474814934
+      },
+      {
+        "seed": 81,
+        "trial": 35,
+        "initial_yaw": -2.20985649611327,
+        "arrived": true,
+        "collided": false,
+        "duration": 22.59999999999994,
+        "min_clearance": 0.059513463998774635,
+        "path_length": 5.298752447786995,
+        "path_ratio": 1.2421788190340965
+      },
+      {
+        "seed": 81,
+        "trial": 36,
+        "initial_yaw": 2.0334531018556863,
+        "arrived": true,
+        "collided": false,
+        "duration": 22.533333333333275,
+        "min_clearance": 0.05726781777105744,
+        "path_length": 4.452293392573855,
+        "path_ratio": 1.112887002381302
+      },
+      {
+        "seed": 81,
+        "trial": 37,
+        "initial_yaw": -0.9348594571556663,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.46666666666663,
+        "min_clearance": 0.036609013713876176,
+        "path_length": 4.15995937889643,
+        "path_ratio": 1.0163507214640866
+      },
+      {
+        "seed": 81,
+        "trial": 38,
+        "initial_yaw": -2.7721831356125963,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.999999999999957,
+        "min_clearance": 0.12494576664384582,
+        "path_length": 4.509728343555704,
+        "path_ratio": 1.0595647628449576
+      },
+      {
+        "seed": 81,
+        "trial": 39,
+        "initial_yaw": 2.441596013846296,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.73333333333328,
+        "min_clearance": 0.10776712795744656,
+        "path_length": 4.859105559187779,
+        "path_ratio": 1.2121730472209373
+      },
+      {
+        "seed": 81,
+        "trial": 40,
+        "initial_yaw": -1.1867635269646588,
+        "arrived": true,
+        "collided": false,
+        "duration": 24.333333333333268,
+        "min_clearance": 0.05626918308023118,
+        "path_length": 6.472403213581755,
+        "path_ratio": 1.5448095764297485
+      },
+      {
+        "seed": 81,
+        "trial": 41,
+        "initial_yaw": -0.20734451909613155,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.06666666666663,
+        "min_clearance": 0.2370749622568035,
+        "path_length": 4.389449819688522,
+        "path_ratio": 1.014051751742714
+      },
+      {
+        "seed": 81,
+        "trial": 42,
+        "initial_yaw": -1.0248745849220304,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.066666666666627,
+        "min_clearance": 0.1434472274834541,
+        "path_length": 4.6101023250694215,
+        "path_ratio": 1.02694698197597
+      },
+      {
+        "seed": 81,
+        "trial": 43,
+        "initial_yaw": -1.5808169876147733,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.39999999999996,
+        "min_clearance": 0.11788500107632366,
+        "path_length": 4.692005904176374,
+        "path_ratio": 1.0835448747100485
+      },
+      {
+        "seed": 81,
+        "trial": 44,
+        "initial_yaw": -2.299572394543816,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.866666666666625,
+        "min_clearance": 0.09734619410295328,
+        "path_length": 4.819208485395857,
+        "path_ratio": 1.181558101606441
+      },
+      {
+        "seed": 81,
+        "trial": 45,
+        "initial_yaw": 1.717105837533203,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.466666666666631,
+        "min_clearance": 0.36467776212895486,
+        "path_length": 4.052742313955693,
+        "path_ratio": 1.0131155705922295
+      },
+      {
+        "seed": 81,
+        "trial": 46,
+        "initial_yaw": -2.93619616651897,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.26666666666663,
+        "min_clearance": 0.12227438746149497,
+        "path_length": 4.36077171580046,
+        "path_ratio": 1.0464827221450888
+      },
+      {
+        "seed": 81,
+        "trial": 47,
+        "initial_yaw": 1.3146570691198944,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.799999999999947,
+        "min_clearance": 0.10044663415677316,
+        "path_length": 4.981485504606814,
+        "path_ratio": 1.0756795748664365
+      },
+      {
+        "seed": 81,
+        "trial": 48,
+        "initial_yaw": 0.8701335859575594,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.333333333333286,
+        "min_clearance": 0.12707727168426483,
+        "path_length": 5.0628470073249,
+        "path_ratio": 1.2036461658679591
+      },
+      {
+        "seed": 81,
+        "trial": 49,
+        "initial_yaw": 0.9497771080620662,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.86666666666663,
+        "min_clearance": 0.03151437036823934,
+        "path_length": 4.256554460447992,
+        "path_ratio": 1.0411870517928292
+      },
+      {
+        "seed": 81,
+        "trial": 50,
+        "initial_yaw": 1.8949730012095636,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.19999999999996,
+        "min_clearance": 0.06693734876773169,
+        "path_length": 4.645895286155487,
+        "path_ratio": 1.0300624157770961
+      },
+      {
+        "seed": 81,
+        "trial": 51,
+        "initial_yaw": -0.7858571003541256,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.599999999999962,
+        "min_clearance": 0.3678134702762995,
+        "path_length": 4.41731088212478,
+        "path_ratio": 1.0109200928379094
+      },
+      {
+        "seed": 81,
+        "trial": 52,
+        "initial_yaw": -0.6926526608307578,
+        "arrived": true,
+        "collided": false,
+        "duration": 33.86666666666667,
+        "min_clearance": 0.046485310649976574,
+        "path_length": 9.489784045942436,
+        "path_ratio": 2.3712393049958123
+      },
+      {
+        "seed": 81,
+        "trial": 53,
+        "initial_yaw": 2.8932552733889403,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.733333333333288,
+        "min_clearance": 0.1189079140416652,
+        "path_length": 5.001235200240833,
+        "path_ratio": 1.2474816718293618
+      },
+      {
+        "seed": 81,
+        "trial": 54,
+        "initial_yaw": -0.692710822020113,
+        "arrived": true,
+        "collided": false,
+        "duration": 39.200000000000266,
+        "min_clearance": 0.09240379819932107,
+        "path_length": 10.025265312810713,
+        "path_ratio": 2.090145082124019
+      },
+      {
+        "seed": 81,
+        "trial": 55,
+        "initial_yaw": -2.356853369387717,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.79999999999996,
+        "min_clearance": 0.09880604014583452,
+        "path_length": 4.379690030811792,
+        "path_ratio": 1.0475132431243237
+      },
+      {
+        "seed": 81,
+        "trial": 56,
+        "initial_yaw": 0.775380857120696,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.19999999999996,
+        "min_clearance": 0.1382821524884449,
+        "path_length": 4.560238084786285,
+        "path_ratio": 1.042490941952949
+      },
+      {
+        "seed": 81,
+        "trial": 57,
+        "initial_yaw": -1.1264466214214917,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.26666666666663,
+        "min_clearance": 0.36756717419657725,
+        "path_length": 4.30960678359965,
+        "path_ratio": 1.013699134729099
+      },
+      {
+        "seed": 81,
+        "trial": 58,
+        "initial_yaw": -1.4305972385234083,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.99999999999995,
+        "min_clearance": 0.032813371466684324,
+        "path_length": 4.655806460754918,
+        "path_ratio": 1.1293976916775017
+      },
+      {
+        "seed": 81,
+        "trial": 59,
+        "initial_yaw": 1.8185622268626735,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.66666666666663,
+        "min_clearance": 0.22900586437300388,
+        "path_length": 4.09581369079715,
+        "path_ratio": 1.0155761530231668
+      },
+      {
+        "seed": 81,
+        "trial": 60,
+        "initial_yaw": -0.8132817368518815,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.99999999999995,
+        "min_clearance": 0.09967888020852608,
+        "path_length": 5.454294187537115,
+        "path_ratio": 1.177940613596042
+      },
+      {
+        "seed": 81,
+        "trial": 61,
+        "initial_yaw": -0.4242506129988296,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.266666666666616,
+        "min_clearance": 0.05091737738819857,
+        "path_length": 5.039935411102816,
+        "path_ratio": 1.2384801949091
+      },
+      {
+        "seed": 81,
+        "trial": 62,
+        "initial_yaw": 0.5882018587026205,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.79999999999995,
+        "min_clearance": 0.13746469505631348,
+        "path_length": 4.779925391992352,
+        "path_ratio": 1.1571520397600061
+      },
+      {
+        "seed": 81,
+        "trial": 63,
+        "initial_yaw": -1.0399547973788625,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.733333333333297,
+        "min_clearance": 0.17779308418340986,
+        "path_length": 4.173369641601605,
+        "path_ratio": 1.0270025846969282
+      },
+      {
+        "seed": 81,
+        "trial": 64,
+        "initial_yaw": -1.3438023981222733,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.266666666666632,
+        "min_clearance": 0.3630415838008235,
+        "path_length": 4.061162172139511,
+        "path_ratio": 1.0123493317913657
+      },
+      {
+        "seed": 81,
+        "trial": 65,
+        "initial_yaw": 1.2086099288731775,
+        "arrived": true,
+        "collided": false,
+        "duration": 33.8,
+        "min_clearance": 0.07197515219616116,
+        "path_length": 9.252349804263226,
+        "path_ratio": 2.2949789615267218
+      },
+      {
+        "seed": 81,
+        "trial": 66,
+        "initial_yaw": 0.14619911513149325,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.933333333333296,
+        "min_clearance": 0.08044703008389725,
+        "path_length": 4.228979300270598,
+        "path_ratio": 1.0249116461264847
+      },
+      {
+        "seed": 81,
+        "trial": 67,
+        "initial_yaw": 0.8144409532090447,
+        "arrived": true,
+        "collided": false,
+        "duration": 23.33333333333327,
+        "min_clearance": 0.03308755954989323,
+        "path_length": 6.033572183074943,
+        "path_ratio": 1.4698489596925488
+      },
+      {
+        "seed": 81,
+        "trial": 68,
+        "initial_yaw": 1.2106909221436613,
+        "arrived": true,
+        "collided": false,
+        "duration": 23.93333333333327,
+        "min_clearance": 0.1061721548189355,
+        "path_length": 6.749559569275202,
+        "path_ratio": 1.4255726949916585
+      },
+      {
+        "seed": 81,
+        "trial": 69,
+        "initial_yaw": 1.5226657693662935,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.866666666666625,
+        "min_clearance": 0.12695052365225099,
+        "path_length": 4.75777730893145,
+        "path_ratio": 1.1008598553697146
+      },
+      {
+        "seed": 81,
+        "trial": 70,
+        "initial_yaw": -2.501362783807225,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.333333333333298,
+        "min_clearance": 0.3650065167022677,
+        "path_length": 4.062841747881201,
+        "path_ratio": 1.0118072204164097
+      },
+      {
+        "seed": 81,
+        "trial": 71,
+        "initial_yaw": -2.5190664390145776,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.666666666666625,
+        "min_clearance": 0.10563483687278405,
+        "path_length": 4.534228529081379,
+        "path_ratio": 1.0938682328137994
+      },
+      {
+        "seed": 81,
+        "trial": 72,
+        "initial_yaw": -2.5644837981169077,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.533333333333296,
+        "min_clearance": 0.0676050178740111,
+        "path_length": 4.337524006258601,
+        "path_ratio": 1.0828636349345264
+      },
+      {
+        "seed": 81,
+        "trial": 73,
+        "initial_yaw": 0.7376745042418373,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.666666666666625,
+        "min_clearance": 0.14300395876152866,
+        "path_length": 4.643862048924588,
+        "path_ratio": 1.1497926488868861
+      },
+      {
+        "seed": 81,
+        "trial": 74,
+        "initial_yaw": -0.7297905797137065,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.466666666666631,
+        "min_clearance": 0.22051368346972686,
+        "path_length": 4.153690283558289,
+        "path_ratio": 1.0184787916352098
+      },
+      {
+        "seed": 81,
+        "trial": 75,
+        "initial_yaw": -0.1900986338802337,
+        "arrived": true,
+        "collided": false,
+        "duration": 20.666666666666615,
+        "min_clearance": 0.07368819101751972,
+        "path_length": 4.927551104660545,
+        "path_ratio": 1.2122007769375747
+      },
+      {
+        "seed": 81,
+        "trial": 76,
+        "initial_yaw": -1.223272539865851,
+        "arrived": true,
+        "collided": false,
+        "duration": 33.93333333333334,
+        "min_clearance": 0.07884252990646909,
+        "path_length": 9.58259474706752,
+        "path_ratio": 2.222480777760318
+      },
+      {
+        "seed": 81,
+        "trial": 77,
+        "initial_yaw": -0.8171964710593244,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.86666666666662,
+        "min_clearance": 0.07862251778506671,
+        "path_length": 4.815184401818383,
+        "path_ratio": 1.1232593408635136
+      },
+      {
+        "seed": 81,
+        "trial": 78,
+        "initial_yaw": 0.9071432032545865,
+        "arrived": true,
+        "collided": false,
+        "duration": 26.266666666666595,
+        "min_clearance": 0.04499796387626728,
+        "path_length": 6.642404996564354,
+        "path_ratio": 1.5758338419746454
+      },
+      {
+        "seed": 81,
+        "trial": 79,
+        "initial_yaw": -1.778042129372661,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.333333333333298,
+        "min_clearance": 0.12886525511244157,
+        "path_length": 4.049393728927413,
+        "path_ratio": 1.0118710252826992
+      },
+      {
+        "seed": 81,
+        "trial": 80,
+        "initial_yaw": 2.63432669957646,
+        "arrived": true,
+        "collided": false,
+        "duration": 21.799999999999944,
+        "min_clearance": 0.0777308054058359,
+        "path_length": 4.697685042540257,
+        "path_ratio": 1.1672321490036202
+      },
+      {
+        "seed": 81,
+        "trial": 81,
+        "initial_yaw": 2.7126153820856613,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.333333333333298,
+        "min_clearance": 0.23637949226233076,
+        "path_length": 4.0466970390823525,
+        "path_ratio": 1.011610479642404
+      },
+      {
+        "seed": 81,
+        "trial": 82,
+        "initial_yaw": -2.6217619753532944,
+        "arrived": true,
+        "collided": false,
+        "duration": 23.466666666666605,
+        "min_clearance": 0.06824435679057891,
+        "path_length": 5.652209221177278,
+        "path_ratio": 1.2972350759773503
+      },
+      {
+        "seed": 81,
+        "trial": 83,
+        "initial_yaw": -2.3365461291624436,
+        "arrived": true,
+        "collided": false,
+        "duration": 23.19999999999994,
+        "min_clearance": 0.0645138866546856,
+        "path_length": 5.148946765394165,
+        "path_ratio": 1.247950689008793
+      },
+      {
+        "seed": 81,
+        "trial": 84,
+        "initial_yaw": 2.0794162229201434,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.333333333333298,
+        "min_clearance": 0.07166132896237862,
+        "path_length": 4.112459433439592,
+        "path_ratio": 1.0145566376191213
+      },
+      {
+        "seed": 81,
+        "trial": 85,
+        "initial_yaw": 0.4536973740660894,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.266666666666632,
+        "min_clearance": 0.3628378692092279,
+        "path_length": 4.057203213666775,
+        "path_ratio": 1.0127312111502196
+      },
+      {
+        "seed": 81,
+        "trial": 86,
+        "initial_yaw": -1.2150801090818149,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.399999999999965,
+        "min_clearance": 0.022876774882747197,
+        "path_length": 4.056929981540435,
+        "path_ratio": 1.0128565863839676
+      },
+      {
+        "seed": 81,
+        "trial": 87,
+        "initial_yaw": 1.4702502055875448,
+        "arrived": true,
+        "collided": false,
+        "duration": 28.06666666666659,
+        "min_clearance": 0.08275328219285827,
+        "path_length": 7.732341396158073,
+        "path_ratio": 1.8584848918515184
+      },
+      {
+        "seed": 81,
+        "trial": 88,
+        "initial_yaw": -2.4981067508091543,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.799999999999955,
+        "min_clearance": 0.043117113890107694,
+        "path_length": 4.303725974066175,
+        "path_ratio": 1.0589038581037988
+      },
+      {
+        "seed": 81,
+        "trial": 89,
+        "initial_yaw": -2.2543235419445025,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.466666666666626,
+        "min_clearance": 0.1069521674460322,
+        "path_length": 4.65972885262945,
+        "path_ratio": 1.0635412563782947
+      },
+      {
+        "seed": 81,
+        "trial": 90,
+        "initial_yaw": -0.11476931037965614,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.333333333333297,
+        "min_clearance": 0.1087294560242823,
+        "path_length": 4.366168682177352,
+        "path_ratio": 1.0829368805610116
+      },
+      {
+        "seed": 81,
+        "trial": 91,
+        "initial_yaw": -2.7851866792350704,
+        "arrived": true,
+        "collided": false,
+        "duration": 18.599999999999955,
+        "min_clearance": 0.1071562560594373,
+        "path_length": 4.97346734597456,
+        "path_ratio": 1.2382708744825945
+      },
+      {
+        "seed": 81,
+        "trial": 92,
+        "initial_yaw": -1.0297329076304251,
+        "arrived": true,
+        "collided": false,
+        "duration": 17.533333333333292,
+        "min_clearance": 0.10178853696706636,
+        "path_length": 4.669124804890037,
+        "path_ratio": 1.0413231540055727
+      },
+      {
+        "seed": 81,
+        "trial": 93,
+        "initial_yaw": 3.0497981349041408,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.99999999999996,
+        "min_clearance": 0.1059868245230065,
+        "path_length": 4.582484136125282,
+        "path_ratio": 1.1413251614930902
+      },
+      {
+        "seed": 81,
+        "trial": 94,
+        "initial_yaw": -1.0932641705938984,
+        "arrived": true,
+        "collided": false,
+        "duration": 24.999999999999932,
+        "min_clearance": 0.06357678772655259,
+        "path_length": 6.184856946840201,
+        "path_ratio": 1.5382172875187516
+      },
+      {
+        "seed": 81,
+        "trial": 95,
+        "initial_yaw": 0.34003554511863604,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.06666666666663,
+        "min_clearance": 0.3655841482725045,
+        "path_length": 4.232194796354617,
+        "path_ratio": 1.0221528996254499
+      },
+      {
+        "seed": 81,
+        "trial": 96,
+        "initial_yaw": 0.18868886622428674,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.999999999999963,
+        "min_clearance": 0.07868313183681638,
+        "path_length": 4.190098242276286,
+        "path_ratio": 1.016216416594618
+      },
+      {
+        "seed": 81,
+        "trial": 97,
+        "initial_yaw": -1.9661106229492433,
+        "arrived": true,
+        "collided": false,
+        "duration": 15.86666666666663,
+        "min_clearance": 0.30484510653874897,
+        "path_length": 4.166602098189255,
+        "path_ratio": 1.0214608906193043
+      },
+      {
+        "seed": 81,
+        "trial": 98,
+        "initial_yaw": -0.7228234614450595,
+        "arrived": true,
+        "collided": false,
+        "duration": 19.733333333333285,
+        "min_clearance": 0.11283542378907105,
+        "path_length": 4.467354708634403,
+        "path_ratio": 1.1168345321597533
+      },
+      {
+        "seed": 81,
+        "trial": 99,
+        "initial_yaw": 1.9645375385533186,
+        "arrived": true,
+        "collided": false,
+        "duration": 16.199999999999964,
+        "min_clearance": 0.11611844893735693,
+        "path_length": 4.323011554280833,
+        "path_ratio": 1.011380757370349
+      }
+    ],
+    "wall_seconds": 31.959266916004708,
+    "median_duration": 17.59999999999996,
+    "median_path_length": 4.571361110455783
+  },
+  "sensitivity": {
+    "sim,delay=0,tau=0.25": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 13.199999999999973,
+        "min_clearance": 0.51,
+        "path_length": 3.7118797504428227,
+        "path_ratio": 0.976810460642848
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 20.466666666666615,
+        "min_clearance": 0.11711742959244023,
+        "path_length": 5.34367737426591,
+        "path_ratio": 1.4062308879647132
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 23.799999999999937,
+        "min_clearance": 0.11054951582041894,
+        "path_length": 6.7796359376633815,
+        "path_ratio": 1.6949089844158454
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 20.53333333333328,
+        "min_clearance": 0.11931549220738694,
+        "path_length": 5.327246027353958,
+        "path_ratio": 1.4019068493036733
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 22.133333333333276,
+        "min_clearance": 0.09362049634445585,
+        "path_length": 4.917158838114613,
+        "path_ratio": 1.9668635352458452
+      }
+    },
+    "sim,delay=0.1,tau=0.5": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 13.933333333333303,
+        "min_clearance": 0.51,
+        "path_length": 3.7737872000166717,
+        "path_ratio": 0.9931018947412293
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 20.666666666666615,
+        "min_clearance": 0.10546598691954126,
+        "path_length": 5.254076252311608,
+        "path_ratio": 1.3826516453451598
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 25.0666666666666,
+        "min_clearance": 0.09733859112572393,
+        "path_length": 6.910715290341063,
+        "path_ratio": 1.7276788225852657
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 22.466666666666608,
+        "min_clearance": 0.1065639245130561,
+        "path_length": 5.457121956612032,
+        "path_ratio": 1.436084725424219
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 19.59999999999995,
+        "min_clearance": 0.10668791547348574,
+        "path_length": 4.9791518607958185,
+        "path_ratio": 1.9916607443183274
+      }
+    },
+    "sim,delay=0.2,tau=0.75": {
+      "open": {
+        "arrived": true,
+        "collided": false,
+        "duration": 14.7333333333333,
+        "min_clearance": 0.46372575892363865,
+        "path_length": 3.8462742410763613,
+        "path_ratio": 1.0121774318622003
+      },
+      "wall": {
+        "arrived": true,
+        "collided": false,
+        "duration": 22.333333333333275,
+        "min_clearance": 0.07031520204618888,
+        "path_length": 5.5131149164480515,
+        "path_ratio": 1.4508197148547504
+      },
+      "slalom": {
+        "arrived": true,
+        "collided": false,
+        "duration": 27.26666666666659,
+        "min_clearance": 0.07425370451751764,
+        "path_length": 7.145666464168835,
+        "path_ratio": 1.7864166160422088
+      },
+      "trap": {
+        "arrived": true,
+        "collided": false,
+        "duration": 21.199999999999946,
+        "min_clearance": 0.06645303127274124,
+        "path_length": 5.696729600872118,
+        "path_ratio": 1.4991393686505574
+      },
+      "pocket": {
+        "arrived": true,
+        "collided": false,
+        "duration": 23.133333333333272,
+        "min_clearance": 0.09890099827368509,
+        "path_length": 5.150938028134226,
+        "path_ratio": 2.06037521125369
+      }
+    }
+  }
+}

@@ -1,5 +1,28 @@
 # amaze-autonomous-drone
 
+## Navigation simulation
+
+The default navigation simulator learns a map from its four range cones,
+replans around obstacles, and explores when it cannot yet connect to the goal.
+It receives no obstacle coordinates. Install the declared dependencies and run:
+
+```bash
+uv sync
+uv run python algorithms/reactive_nav.py --scenario all
+uv run python algorithms/reactive_nav.py --scenario all --save runs.png
+uv run python algorithms/reactive_nav.py --stress --trials 150 --seed 7
+uv run python -m unittest algorithms.test_reactive_nav -v
+```
+
+Use `--navigation reactive` for the earlier potential-field algorithm.
+`--profile flight` retains that controller and its existing flight gains.
+Mapped navigation needs yaw scanning to observe the blind wedges; disabling
+the sweep can prevent progress.
+
+See [the simulation report](docs/reactive_nav/mapped_navigation.md) for measured
+efficiency, remaining failures, and reproducible comparisons, and
+[the trajectory plot](docs/reactive_nav/mapped_runs.png) for the five built-in scenarios.
+
 ## Orbit prototype
 
 Run the simulator from the repository root:

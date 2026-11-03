@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """
-reactive_nav.py -- go from A to B with no pre-planned path.
+reactive_nav.py -- navigate an initially unknown world from A to B.
 
 ALGORITHM
 ---------
-Artificial potential fields computed directly from the Multi-ranger's beams,
-with a Bug-style wall-following escape for local minima.
+The default simulation profile builds a free-space/obstacle grid from the four
+ranger cones and odometry. It replans with A*, shortcuts through observed free
+space, and explores new viewpoints when the goal is not yet connected. Motion
+is checked against an inflated observed-space corridor, including momentum.
+The controller never receives the simulator's geometry or room bounds.
+
+The flight profile retains the earlier potential-field controller with a
+Bug-style wall-following escape; use --navigation reactive to compare it in
+simulation with the same speed settings.
 
     SEEK    v = attract(goal) + sum(repel(beam) for each beam in range)
     ESCAPE  entered when progress toward the goal stalls. Rotates the command
@@ -18,9 +25,9 @@ ignores obstacles until too late or pushes from across the room.
 
 WHAT THIS DOES NOT GUARANTEE
 ----------------------------
-This is a heuristic, not Bug2: it has no m-line or complete boundary map.
-It can cycle, and a clear beam does not establish visibility in a blind wedge. The
-simulator exists so you can find those cases on your laptop, not in the air.
+Neither mode is a completeness or collision-avoidance guarantee. The mapped
+mode assumes static obstacles and accurate odometry; its grid and cone model
+are approximations. The reactive mode can cycle and has no persistent map.
 
 SENSING LIMITS THAT SHAPE THE DESIGN
 ------------------------------------
@@ -31,13 +38,13 @@ mitigations are built in:
     * axis bias, preferring motion along beam directions
     * slow continuous yaw, sweeping the cones across the blind wedges
 
-The simulated ranger casts multiple rays across each cone's real field of view,
-so it reproduces the blind wedges. A sim with ideal point sensors would tell you
-comforting lies.
+The simulated ranger computes the continuous minimum within each cone while
+preserving the blind wedges between cones. Mapped navigation waits for the yaw
+sweep to observe space before moving into it.
 
 USAGE
 -----
-    python3 reactive_nav.py --scenario trap        # watch it stall and escape
+    python3 reactive_nav.py --scenario trap
     python3 reactive_nav.py --scenario slalom
     python3 reactive_nav.py --scenario all --save runs.png
     python3 reactive_nav.py --fly --goal 2.0 0.0   # needs Flow + Multi-ranger
@@ -46,6 +53,7 @@ USAGE
 from __future__ import annotations
 
 import argparse
+import heapq
 import math
 import sys
 from collections import deque
@@ -98,6 +106,7 @@ class Gains:
     min_speed_frac: float = 0.30   # floor on the proximity slowdown
     cmd_accel: float = math.inf    # [m/s²] ordinary velocity-command slew limit
     brake_time: float = 0.0        # [s] closing-speed horizon; 0 disables
+    navigation: str = "mapped"     # sensor-built map; "reactive" keeps the field controller
 
     @classmethod
     def flight(cls) -> "Gains":
@@ -108,6 +117,7 @@ class Gains:
         this profile still needs validation against actual sensor/vehicle logs.
         """
         return cls(
+            navigation="reactive",
             v_max=0.28,          # slower: sparse sensing needs braking distance
             d_influence=1.00,
             d_panic=0.30,
@@ -125,12 +135,12 @@ class Gains:
 
 
 class ReactiveController:
-    """State machine over potential fields. One instance per flight.
+    """Sensor-only navigation facade. One instance per run.
 
-    step() is the whole algorithm. It takes range readings in the BODY frame
+    step() takes range readings in the BODY frame
     plus the current world-frame position estimate, and returns a world-frame
     velocity. Nothing in here knows whether it is driving a simulation or a
-    real Crazyflie.
+    real Crazyflie. Gains selects online mapping or the legacy field controller.
     """
 
     SEEK = "seek"
@@ -140,6 +150,8 @@ class ReactiveController:
     def __init__(self, goal, gains: Gains | None = None):
         self.goal = np.asarray(goal, dtype=float)
         self.g = gains or Gains()
+        if self.g.navigation not in ("mapped", "reactive"):
+            raise ValueError("navigation must be mapped or reactive")
         self.state = self.SEEK
         self._hist: deque = deque()
         self._escape_sign = 1.0
@@ -154,6 +166,7 @@ class ReactiveController:
         self._v_prev: np.ndarray | None = None
         self._range_hist: dict = {}
         self._t = 0.0
+        self._planner = SensorMapPlanner(self.goal, self.g) if self.g.navigation == "mapped" else None
 
     def _filter_ranges(self, ranges: dict) -> dict:
         """Median-filter each beam. The VL53L1x throws occasional single-frame
@@ -248,13 +261,17 @@ class ReactiveController:
 
     # -- main entry point -----------------------------------------------------
 
-    def step(self, ranges: dict, pos, yaw: float, dt: float, vel=None):
+    def step(self, ranges: dict, pos, yaw: float, dt: float, vel=None, sensor_pos=None):
         """Returns (v_world (2,), yaw_rate, state).
 
-        vel is the current world-frame velocity, used to oppose residual motion.
+        vel is the current world-frame velocity. sensor_pos optionally supplies
+        the acquisition position of delayed ranges; yaw must match that scan.
         """
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError("dt must be finite and positive")
+        if self._planner is not None:
+            command, yaw_rate, self.state = self._planner.step(ranges, pos, yaw, dt, vel, sensor_pos)
+            return command, yaw_rate, self.state
         self._t += dt
         raw_ranges = ranges
         _, raw_nearest = self._closest_beam_normal(ranges, yaw)
@@ -467,6 +484,207 @@ class ReactiveController:
         return v, yaw_cmd, self.state
 
 
+class SensorMapPlanner:
+    """Online grid navigation using only the four ranger cones and odometry.
+
+    A minimum range locates a surface somewhere on a cone arc, not on its
+    centre ray. Keep that whole arc as a possible obstacle; later free-space
+    observations disambiguate it. Unknown space is allowed in the global plan,
+    but movement is restricted to space that has actually been observed free.
+    No world geometry, room bounds, or simulator collision queries enter here.
+    """
+
+    resolution = 0.10
+    clearance = 0.16
+    lookahead = 0.45
+
+    def __init__(self, goal, gains):
+        self.goal = goal
+        self.g = gains
+        self.origin = None
+        self.free = None
+        self.obstacles = None
+        self.path = []
+        self.elapsed = 0.0
+        self.next_plan = 0.0
+        self.trail = deque(maxlen=512)
+
+    def _initialize(self, pos):
+        # The initial workspace is an exploration budget, not a known room.
+        self.origin = np.floor((np.minimum(pos, self.goal) - 5.0) / self.resolution) * self.resolution
+        hi = np.maximum(pos, self.goal) + 5.0
+        shape = np.ceil((hi - self.origin) / self.resolution).astype(int) + 1
+        self.free = np.zeros(tuple(shape), dtype=bool)
+        self.obstacles = np.zeros_like(self.free)
+        self.visits = np.zeros_like(self.free, dtype=float)
+        self.xy = self.origin + np.moveaxis(np.indices(shape), 0, -1) * self.resolution
+
+    def _cell(self, point):
+        return tuple(np.rint((point - self.origin) / self.resolution).astype(int))
+
+    def _observe(self, ranges, pos, yaw):
+        delta = self.xy - pos
+        distance = np.linalg.norm(delta, axis=-1)
+        angle = np.arctan2(delta[..., 1], delta[..., 0]) - yaw
+        half = math.radians(BEAM_FOV_DEG / 2)
+        for name, direction in BEAM_DIRS_BODY.items():
+            reading = ranges.get(name)
+            if reading is None:
+                continue
+            if not math.isfinite(reading) or reading <= 0:
+                continue
+            bearing = math.atan2(direction[1], direction[0])
+            offset = np.abs((angle - bearing + math.pi) % (2 * math.pi) - math.pi)
+            cone = offset <= half
+            self.free |= cone & (distance < reading - self.resolution * 0.5)
+            # Distant arcs have too much lateral uncertainty to be useful as
+            # occupied cells. They still contribute observed free space.
+            if reading < 1.5:
+                arc = offset <= half + self.resolution / np.maximum(distance, .1)
+                self.obstacles |= arc & (np.abs(distance - reading) < self.resolution)
+        self.obstacles &= ~self.free
+
+    @staticmethod
+    def _inflate(mask, cells):
+        result = mask.copy()
+        nx, ny = mask.shape
+        radius = int(math.ceil(cells))
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx * dx + dy * dy > cells * cells:
+                    continue
+                sx, ex = max(0, -dx), min(nx, nx - dx)
+                sy, ey = max(0, -dy), min(ny, ny - dy)
+                result[sx+dx:ex+dx, sy+dy:ey+dy] |= mask[sx:ex, sy:ey]
+        return result
+
+    def _plan(self, pos, blocked):
+        start, goal = self._cell(pos), self._cell(self.goal)
+        nx, ny = blocked.shape
+        frontier = [(0.0, 0.0, start)]
+        costs, parents = {start: 0.0}, {}
+        best = start
+        best_score = math.inf
+        unexplored_edge = self.free & self._inflate(~self.free, 5.0) & ~blocked
+        moves = [(dx, dy, math.hypot(dx, dy)) for dx in (-1, 0, 1)
+                 for dy in (-1, 0, 1) if dx or dy]
+        while frontier:
+            _, cost, cell = heapq.heappop(frontier)
+            if cost != costs[cell]:
+                continue
+            # Prefer goalward frontiers, but do not revisit an uninformative
+            # viewpoint indefinitely when a wide cone closes a possible gap.
+            score = (math.hypot(cell[0] - goal[0], cell[1] - goal[1])
+                     + .15 * cost + 3.0 * self.visits[cell])
+            if unexplored_edge[cell] and score < best_score:
+                best, best_score = cell, score
+            if cell == goal:
+                path = [cell]
+                while cell != start:
+                    cell = parents[cell]
+                    path.append(cell)
+                return [self.origin + np.array(c) * self.resolution for c in reversed(path)]
+            x, y = cell
+            for dx, dy, length in moves:
+                xx, yy = x + dx, y + dy
+                if not (0 <= xx < nx and 0 <= yy < ny) or blocked[xx, yy]:
+                    continue
+                if dx and dy and (blocked[x + dx, y] or blocked[x, y + dy]):
+                    continue
+                neighbor = (xx, yy)
+                candidate = cost + length * (1.0 if self.free[xx, yy] else 1.3)
+                if candidate < costs.get(neighbor, math.inf):
+                    costs[neighbor] = candidate
+                    parents[neighbor] = cell
+                    heuristic = math.hypot(xx - goal[0], yy - goal[1])
+                    heapq.heappush(frontier, (candidate + heuristic, candidate, neighbor))
+        path = [best]
+        while best != start:
+            best = parents[best]
+            path.append(best)
+        return [self.origin + np.array(c) * self.resolution for c in reversed(path)]
+
+    def _line_clear(self, start, end, blocked):
+        # Supercover: test every crossed cell, including both sides of a grid
+        # boundary. Regularly spaced samples can miss a clipped cell corner.
+        a = (start - self.origin) / self.resolution + .5
+        b = (end - self.origin) / self.resolution + .5
+        delta = b - a
+        cuts = [0., 1.]
+        for axis in range(2):
+            if abs(delta[axis]) > 1e-12:
+                edges = np.arange(math.ceil(min(a[axis], b[axis])),
+                                  math.floor(max(a[axis], b[axis])) + 1)
+                cuts.extend(((edges - a[axis]) / delta[axis]).tolist())
+        cuts = np.unique(np.clip(cuts, 0, 1))
+        times = np.concatenate((cuts, (cuts[1:] + cuts[:-1]) * .5))
+        points = a + times[:, None] * delta
+        offsets = np.array([[-1, -1], [-1, 1], [1, -1], [1, 1]]) * 1e-9
+        cells = np.floor(points[:, None, :] + offsets).astype(int).reshape(-1, 2)
+        if np.any(cells < 0) or np.any(cells >= blocked.shape):
+            return False
+        return not np.any(blocked[cells[:, 0], cells[:, 1]])
+
+    def step(self, ranges, pos, yaw, dt, vel, sensor_pos=None):
+        pos = np.asarray(pos, dtype=float)
+        vel = np.zeros(2) if vel is None else np.asarray(vel, dtype=float)
+        self.elapsed += dt
+        if self.origin is None:
+            self._initialize(pos)
+        self._observe(ranges, pos if sensor_pos is None else sensor_pos, yaw)
+        self.visits += dt * (np.linalg.norm(self.xy - pos, axis=-1) < .4)
+        dist = float(np.linalg.norm(self.goal - pos))
+        if dist < self.g.goal_tol and np.linalg.norm(vel) < .04:
+            return np.zeros(2), 0.0, ReactiveController.ARRIVED
+        blocked = self._inflate(self.obstacles, self.clearance / self.resolution)
+        # Unknown space cannot support a motion command. A scan fills it in.
+        unsafe = self._inflate(~self.free, self.clearance / self.resolution) | blocked
+        current_unsafe = unsafe[self._cell(pos)]
+        if current_unsafe and self.trail:
+            # A newly observed cone arc can inflate over the current cell.
+            # Requiring that cell to be clear would prohibit even retreat.
+            # Retrace short, actually traversed segments in this static map;
+            # never use this exception to enter new space or cut a corner.
+            while self.trail and np.linalg.norm(self.trail[-1] - pos) < .04:
+                self.trail.pop()
+            if self.trail:
+                retreat = self.trail[-1] - pos
+                length = float(np.linalg.norm(retreat))
+                if length < .25 and self._line_clear(pos, self.trail[-1], ~self.free | self.obstacles):
+                    self.next_plan = 0.0
+                    command = retreat / max(length, 1e-9) * min(.15, length * 2)
+                    return command, self.g.yaw_rate, ReactiveController.ESCAPE
+        elif not current_unsafe and (not self.trail or np.linalg.norm(self.trail[-1] - pos) > .03):
+            self.trail.append(pos.copy())
+        if self.elapsed >= self.next_plan or not self.path:
+            self.path = self._plan(pos, blocked)
+            self.next_plan = self.elapsed + .5
+        target = None
+        if self._line_clear(pos, self.goal, unsafe):
+            target = self.goal
+        else:
+            # Advance along the plan without cutting an unobserved corner.
+            for point in self.path:
+                if np.linalg.norm(point - pos) <= self.lookahead and self._line_clear(pos, point, unsafe):
+                    target = point
+        yaw_rate = self.g.yaw_rate
+        if target is None:
+            return np.zeros(2), yaw_rate, ReactiveController.ESCAPE
+        delta = target - pos
+        distance = float(np.linalg.norm(delta))
+        speed = min(self.g.v_max, distance * 1.5,
+                    max(0.0, dist - self.g.goal_tol * .5) * 1.5)
+        command = delta / max(distance, 1e-9) * speed
+        # Check the stopping corridor, including current velocity's momentum.
+        horizon = .6
+        for scale in (1.0, .5, .25, 0.0):
+            candidate = command * scale
+            endpoint = pos + .25 * vel + horizon * candidate
+            if self._line_clear(pos, endpoint, unsafe):
+                return candidate, yaw_rate, ReactiveController.SEEK
+        return np.zeros(2), yaw_rate, ReactiveController.ESCAPE
+
+
 # ----------------------------------------------------------------------------
 # 2. SIMULATOR
 # ----------------------------------------------------------------------------
@@ -556,16 +774,20 @@ def _ray_rect(origin, direction, rect: Rect) -> float:
     return tmin if tmin >= 0.0 else math.inf
 
 
-def simulate_ranger(world: SimWorld, pos, yaw: float, rays_per_beam: int = 7) -> dict:
+def simulate_ranger(world: SimWorld, pos, yaw: float, rays_per_beam: int | None = None) -> dict:
     """Fake a Multi-ranger, including its finite field of view.
 
-    Each beam fans several rays across its real 27-degree cone and reports the
-    minimum. This is what makes the blind diagonal wedges show up in
-    simulation -- a single centre ray per beam would hide the failure mode the
-    escape behaviour exists to handle.
+    By default compute the minimum over the continuous 27-degree cone. Edge
+    projections, corners, and cone-boundary intersections cover every possible
+    minimum on a rectangle. Sparse ray sampling can miss thin objects *inside*
+    a cone; the unsensed wedges between cones remain blind in either mode.
+    Pass rays_per_beam explicitly to compare against the sampled-ray model.
     """
     half = math.radians(BEAM_FOV_DEG * 0.5)
-    offsets = np.linspace(-half, half, rays_per_beam)
+    if rays_per_beam is not None and (not isinstance(rays_per_beam, int) or rays_per_beam < 2):
+        raise ValueError("rays_per_beam must be at least 2")
+    count = rays_per_beam or 2
+    offsets = np.linspace(-half, half, count)
     rects = world.all_rects()
     angles = np.array([math.atan2(d[1], d[0]) for d in BEAM_DIRS_BODY.values()])
     angles = (angles[:, None] + yaw + offsets).reshape(-1)
@@ -581,7 +803,24 @@ def simulate_ranger(world: SimWorld, pos, yaw: float, rays_per_beam: int = 7) ->
     leave = far.min(axis=-1)
     miss = np.any(parallel & ((lo > 0) | (hi < 0)), axis=-1) | (enter > leave)
     hits = np.where(miss, BEAM_MAX_RANGE, np.minimum(enter, BEAM_MAX_RANGE))
-    distances = hits.min(axis=1).reshape(4, rays_per_beam).min(axis=1)
+    distances = hits.min(axis=1).reshape(4, count).min(axis=1)
+    if rays_per_beam is None:
+        pos = np.asarray(pos)
+        low = np.array([r.lo for r in rects])
+        high = np.array([r.hi for r in rects])
+        projection = np.clip(pos, low, high)
+        points = np.stack((low, high, np.column_stack((low[:, 0], high[:, 1])),
+                           np.column_stack((high[:, 0], low[:, 1])),
+                           np.column_stack((low[:, 0], projection[:, 1])),
+                           np.column_stack((high[:, 0], projection[:, 1])),
+                           np.column_stack((projection[:, 0], low[:, 1])),
+                           np.column_stack((projection[:, 0], high[:, 1]))), axis=1) - pos
+        lengths = np.linalg.norm(points, axis=-1)
+        bearings = np.arctan2(points[..., 1], points[..., 0])
+        axes = np.array([math.atan2(d[1], d[0]) + yaw for d in BEAM_DIRS_BODY.values()])
+        offset = (bearings[None, ...] - axes[:, None, None] + math.pi) % (2 * math.pi) - math.pi
+        inside = np.abs(offset) <= half + 1e-12
+        distances = np.minimum(distances, np.where(inside, lengths, np.inf).min(axis=(1, 2)))
     return dict(zip(BEAM_DIRS_BODY, map(float, distances)))
 
 
@@ -595,9 +834,17 @@ def simulate(world: SimWorld, start, goal, gains: Gains | None = None,
     against an ideal integrator but oscillate on real hardware also oscillate
     here.
     """
-    if dt <= 0 or t_limit <= 0 or tau < 0 or drone_radius < 0 or sensor_delay < 0:
+    if (not all(math.isfinite(value) for value in
+                (dt, t_limit, tau, drone_radius, sensor_delay, initial_yaw))
+            or dt <= 0 or t_limit <= 0 or tau < 0 or drone_radius < 0 or sensor_delay < 0):
         raise ValueError("dt/t_limit must be positive; tau/radius/delay must be nonnegative")
+    if any(np.asarray(point).shape != (2,) or not np.all(np.isfinite(point))
+           for point in (start, goal)):
+        raise ValueError("start and goal must be finite 2D points")
     ctrl = ReactiveController(goal, gains)
+    if getattr(ctrl, "_planner", None) is not None:
+        # Footprint is controller configuration, not access to world geometry.
+        ctrl._planner.clearance = drone_radius + .07
     pos = np.asarray(start, dtype=float).copy()
     vel = np.zeros(2)
     yaw = initial_yaw
@@ -607,11 +854,12 @@ def simulate(world: SimWorld, start, goal, gains: Gains | None = None,
     collided = False
     step_clearance = world.clearance(pos) - drone_radius
 
-    while t < t_limit:
+    while True:
         ranges = simulate_ranger(world, pos, yaw)
-        sensor_queue.append((ranges, yaw))
-        sensed_ranges, sensed_yaw = sensor_queue[0]
-        v_cmd, yaw_rate, state = ctrl.step(sensed_ranges, pos, sensed_yaw, dt, vel=vel)
+        sensor_queue.append((ranges, yaw, pos.copy()))
+        sensed_ranges, sensed_yaw, sensed_pos = sensor_queue[0]
+        kwargs = {"sensor_pos": sensed_pos} if getattr(ctrl, "_planner", None) is not None else {}
+        v_cmd, yaw_rate, state = ctrl.step(sensed_ranges, pos, sensed_yaw, dt, vel=vel, **kwargs)
 
         log["t"].append(t)
         log["pos"].append(pos.copy())
@@ -624,15 +872,19 @@ def simulate(world: SimWorld, start, goal, gains: Gains | None = None,
             collided = True
             break
 
-        if state == ReactiveController.ARRIVED:
+        if state == ReactiveController.ARRIVED or t >= t_limit:
             break
 
-        vel += (v_cmd - vel) * (1.0 - math.exp(-dt / tau) if tau else 1.0)
-        next_pos = pos + vel * dt
+        step_dt = min(dt, t_limit - t)
+        # Exact first-order velocity response AND its displacement integral.
+        # Using the final velocity for the whole step overstates acceleration.
+        decay = math.exp(-step_dt / tau) if tau else 0.0
+        next_pos = pos + v_cmd * step_dt + (vel - v_cmd) * tau * (1.0 - decay)
+        vel = v_cmd + (vel - v_cmd) * decay
         step_clearance = world.segment_clearance(pos, next_pos) - drone_radius
         pos = next_pos
-        yaw = (yaw + yaw_rate * dt) % (2 * math.pi)
-        t += dt
+        yaw = (yaw + yaw_rate * step_dt) % (2 * math.pi)
+        t = min(t + step_dt, t_limit)
 
     # Include the final integrated step even when it lands on the time limit.
     if step_clearance <= 0:
@@ -647,6 +899,9 @@ def simulate(world: SimWorld, start, goal, gains: Gains | None = None,
     log["collided"] = collided
     log["arrived"] = ctrl.state == ReactiveController.ARRIVED and not collided
     log["duration"] = t
+    log["path_length"] = float(np.linalg.norm(np.diff(log["pos"], axis=0), axis=1).sum())
+    direct = float(np.linalg.norm(np.asarray(goal) - np.asarray(start)))
+    log["path_ratio"] = log["path_length"] / direct if direct > 0 else 0.0
     log["escape_fraction"] = (
         sum(1 for s in log["state"] if s == ReactiveController.ESCAPE)
         / max(len(log["state"]), 1)
@@ -729,9 +984,9 @@ def plot_runs(runs, save=None):
         states = log["state"]
         seek = np.array([s == ReactiveController.SEEK for s in states])
         esc = np.array([s == ReactiveController.ESCAPE for s in states])
-        ax.plot(pos[seek, 0], pos[seek, 1], ".", ms=2.4, color="#0b8043", label="seek")
+        ax.plot(pos[seek, 0], pos[seek, 1], ".", ms=2.4, color="#0b8043", label="navigate")
         if esc.any():
-            ax.plot(pos[esc, 0], pos[esc, 1], ".", ms=2.4, color="#e37400", label="escape")
+            ax.plot(pos[esc, 0], pos[esc, 1], ".", ms=2.4, color="#e37400", label="scan / escape")
         ax.scatter(*start, c="#0b8043", s=70, marker="^", zorder=5)
         ax.scatter(*goal, c="#c5221f", s=110, marker="*", zorder=5)
         ax.add_patch(plt.Circle(goal, 0.18, fill=False, ls="--", color="#c5221f", lw=0.8))
@@ -739,7 +994,8 @@ def plot_runs(runs, save=None):
         ax.set_ylim(world.bounds_lo[1], world.bounds_hi[1])
         ax.set_aspect("equal")
         verdict = "reached" if log["arrived"] else ("COLLIDED" if log["collided"] else "timeout")
-        ax.set_title(f"{name}: {verdict} in {log['duration']:.1f} s", fontsize=10)
+        ax.set_title(f"{name}: {verdict} in {log['duration']:.1f} s\n"
+                     f"travelled {log['path_length']:.2f} m", fontsize=10)
         ax.set_xlabel("x [m]")
         if col == 0:
             ax.set_ylabel("y [m]")
@@ -988,6 +1244,8 @@ def main(argv=None):
                          "hardware, so leave it off unless you are debugging")
     ap.add_argument("--profile", choices=["sim", "flight"], default=None,
                     help="gain set. Defaults to flight with --fly, sim otherwise")
+    ap.add_argument("--navigation", choices=["mapped", "reactive"], default=None,
+                    help="mapped needs yaw scanning; defaults to mapped for sim, reactive for flight")
     # Field-tuning overrides. The spinning/erratic failure mode only appears on
     # real hardware, so it cannot be tuned out in simulation -- these exist so
     # you can adjust at the drone without editing the file.
@@ -1016,6 +1274,8 @@ def main(argv=None):
 
     profile = args.profile or ("flight" if args.fly else "sim")
     gains = Gains.flight() if profile == "flight" else Gains()
+    if args.navigation is not None:
+        gains.navigation = args.navigation
 
     for attr, value in [("v_max", args.v_max), ("d_influence", args.d_influence),
                         ("d_panic", args.d_panic), ("k_repel", args.k_repel),
@@ -1027,6 +1287,7 @@ def main(argv=None):
     if args.no_yaw_sweep:
         gains.yaw_rate = 0.0
     if args.straight:
+        gains.navigation = "reactive"
         gains.k_repel = 0.0
         gains.d_influence = 0.01
         gains.yaw_rate = 0.0
@@ -1068,7 +1329,8 @@ def main(argv=None):
         log = simulate(world, start, goal, gains)
         verdict = "reached" if log["arrived"] else ("COLLIDED" if log["collided"] else "timeout")
         print(f"{label:8s} {verdict:9s} {log['duration']:5.1f} s  "
-              f"escape {log['escape_fraction'] * 100:4.1f}%  "
+              f"path {log['path_length']:5.2f} m  "
+              f"scan/escape {log['escape_fraction'] * 100:4.1f}%  "
               f"min propeller clearance {log['min_clearance']:.2f} m")
         runs.append((label, world, start, goal, log))
 
