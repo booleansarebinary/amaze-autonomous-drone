@@ -128,8 +128,7 @@ async def run_websocket_server():
     )
 
     async with serve(
-        handle_client,\
-        
+        handle_client,
         WEBSOCKET_HOST,
         WEBSOCKET_PORT
     ):
