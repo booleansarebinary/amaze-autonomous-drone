@@ -1,0 +1,20 @@
+{
+  "name": "amaze-leaderboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/space-grotesk": "^5.1.0",
+    "@fontsource/space-mono": "^5.1.0",
+    "gsap": "^3.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
+  }
+}
