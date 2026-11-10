@@ -1,7 +1,7 @@
 import { gsap } from "gsap";
 import { EASE, calm } from "./ease";
 import { darken, INK, P, C, G, WH, PERI } from "./art/svg";
-import { fmtError, fmtTime, type Entry } from "./model";
+import { fmtError, fmtTimestamp, type Entry } from "./model";
 import type { Actor } from "./actor";
 
 // Podium/Rocket geometry from the Figma component (body bottoms share y 920).
@@ -62,7 +62,8 @@ export class Place {
 
   /** Name band roll: old text slides down and out, new text drops in (240 ms, 40 ms stagger name → error → time). */
   setBand(state: BandState, animate = true) {
-    const texts = state.kind === "entry" ? [state.entry.name, fmtError(state.entry.error), fmtTime(state.entry.time)] : state.kind === "incoming" ? ["Incoming", "-.-%", "-:--"] : ["", "", ""];
+    this.el.querySelector(".rank")!.textContent = state.kind === "entry" ? String(state.entry.rank) : String(this.index + 1);
+    const texts = state.kind === "entry" ? [state.entry.name, fmtError(state.entry.error), `${fmtTimestamp(state.entry.submittedAt)} CST`] : state.kind === "incoming" ? ["Incoming", "-.-%", "--:-- CST"] : ["", "", ""];
     const key = texts.join("|");
     if (key === this.bandKey) return;
     this.bandKey = key;

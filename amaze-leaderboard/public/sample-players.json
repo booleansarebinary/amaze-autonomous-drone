@@ -1,11 +1,61 @@
 {
   "players": [
-    { "name": "Mira", "error": 1.2, "time": "0:34", "look": { "color": "Pink", "outfit": "Tank top", "hat": "Headband" } },
-    { "name": "Theo", "error": 2.8, "time": "0:41", "look": { "color": "Mint", "outfit": "Overalls", "hat": "Cap" } },
-    { "name": "Juno", "error": 3.5, "time": "0:29", "look": { "color": "Yellow", "outfit": "Tee", "hat": "Beanie" } },
-    { "name": "Kai", "error": 4.1, "time": 52 },
-    { "name": "Priya", "error": 5.0, "time": 38 },
-    { "name": "Oskar", "error": 6.3, "time": 65 },
-    { "name": "Lena", "error": 7.7, "time": 47 }
+    {
+      "name": "Mira",
+      "error": 1.2,
+      "look": {
+        "color": "Pink",
+        "outfit": "Tank top",
+        "hat": "Headband"
+      },
+      "id": "sample-1",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Theo",
+      "error": 2.8,
+      "look": {
+        "color": "Mint",
+        "outfit": "Overalls",
+        "hat": "Cap"
+      },
+      "id": "sample-2",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Juno",
+      "error": 3.5,
+      "look": {
+        "color": "Yellow",
+        "outfit": "Tee",
+        "hat": "Beanie"
+      },
+      "id": "sample-3",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Kai",
+      "error": 4.1,
+      "id": "sample-4",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Priya",
+      "error": 5.0,
+      "id": "sample-5",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Oskar",
+      "error": 6.3,
+      "id": "sample-6",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    },
+    {
+      "name": "Lena",
+      "error": 7.7,
+      "id": "sample-7",
+      "submittedAt": "2026-11-09T18:30:00Z"
+    }
   ]
 }

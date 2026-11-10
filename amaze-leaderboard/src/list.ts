@@ -1,6 +1,6 @@
 import { gsap } from "gsap";
 import { EASE, calm } from "./ease";
-import { fmtError, fmtTime, type Entry } from "./model";
+import { fmtError, fmtTimestamp, type Entry } from "./model";
 import { layersHtml } from "./actor";
 import { G, L } from "./art/svg";
 
@@ -22,21 +22,22 @@ export class RankList {
   constructor(stageRoot: HTMLElement) {
     const panel = document.createElement("div");
     panel.className = "panel";
-    panel.innerHTML = `<div class="cols"><span class="c-rank">Rank</span><span class="c-name">Player</span><span class="c-time">Time</span><span class="c-err">Error</span></div><div class="viewport"><div class="strip"></div></div><div class="fade-top"></div><div class="fade-bottom"></div>`;
+    panel.innerHTML = `<div class="cols"><span class="c-rank">Rank</span><span class="c-name">Player</span><span class="c-time">Submitted<br>(CST)</span><span class="c-err">Error</span></div><div class="viewport"><div class="strip"></div></div><div class="fade-top"></div><div class="fade-bottom"></div>`;
     stageRoot.appendChild(panel);
     this.strip = panel.querySelector(".strip")!;
     this.marker = document.createElement("div");
     this.marker.className = "marker";
-    this.marker.innerHTML = `${planet}<span>Back to 4th</span>`;
+    this.marker.innerHTML = `${planet}<span>Back to the list</span>`;
   }
 
-  private rowHtml(e: Entry, rank: number) {
-    return `<div class="r-rank"><span>${rank}</span></div><div class="avatar"><div class="mini">${layersHtml(e.look)}</div></div><div class="r-name">${escapeHtml(e.name)}</div><div class="r-time">${fmtTime(e.time)}</div><div class="r-err">${fmtError(e.error)}</div><div class="ring"></div>`;
+  private rowHtml(e: Entry) {
+    return `<div class="r-rank"><span>${e.rank}</span></div><div class="avatar"><div class="mini">${layersHtml(e.look)}</div></div><div class="r-name">${escapeHtml(e.name)}</div><div class="r-time">${fmtTimestamp(e.submittedAt)}</div><div class="r-err">${fmtError(e.error)}</div><div class="ring"></div>`;
   }
-  private makeRow(e: Entry, rank: number) { const r = document.createElement("div"); r.className = "row"; r.innerHTML = this.rowHtml(e, rank); return r; }
+  private makeRow(e: Entry) { const r = document.createElement("div"); r.className = "row"; r.innerHTML = this.rowHtml(e); return r; }
 
   /** Set the list (ranks 4+). New rows slide in with a gold ring; moved rows shift with a 40 ms stagger; rank changes get a chevron for 3 s. */
   update(entries: Entry[], animate = true) {
+    if (JSON.stringify(entries) === JSON.stringify(this.order)) return;
     const prev = new Map(this.order.map((e, i) => [e.id, i]));
     const prevTop = new Map([...this.rows].map(([id, el]) => [id, gsap.getProperty(el, "y") as number]));
     this.order = entries;
@@ -46,11 +47,11 @@ export class RankList {
       if (animate && !calm.on) gsap.to(el, { opacity: 0, duration: 0.3, ease: EASE.out, onComplete: () => el.remove() }); else el.remove();
     }
     entries.forEach((e, i) => {
-      const rank = i + 4, y = i * STEP;
+      const y = i * STEP;
       let el = this.rows.get(e.id);
       const isNew = !el;
-      if (!el) { el = this.makeRow(e, rank); this.strip.appendChild(el); this.rows.set(e.id, el); }
-      else { el.innerHTML = this.rowHtml(e, rank); }
+      if (!el) { el = this.makeRow(e); this.strip.appendChild(el); this.rows.set(e.id, el); }
+      else { el.innerHTML = this.rowHtml(e); }
       const was = prev.get(e.id);
       if (!animate || calm.on) { gsap.set(el, { y, x: 0, opacity: 1 }); return; }
       if (isNew) {
@@ -87,7 +88,7 @@ export class RankList {
     gsap.set(this.marker, { y: n * STEP });
     this.strip.appendChild(this.marker);
     this.order.slice(0, VISIBLE).forEach((e, i) => {
-      const c = this.makeRow(e, i + 4);
+      const c = this.makeRow(e);
       gsap.set(c, { y: (n + 1 + i) * STEP });
       this.strip.appendChild(c);
       this.copies.push(c);

@@ -36,6 +36,7 @@ export class Director {
   }
 
   show(ranking: Entry[]) {
+    if (!this.busy && JSON.stringify(ranking) === JSON.stringify(this.shown)) return;
     this.pending = ranking;
     if (!this.busy) void this.flush();
   }
@@ -59,7 +60,7 @@ export class Director {
       p.stopBob(true);
       const e = next[i];
       p.occupant = null;
-      if (e) { const a = this.spawn(e); a.setHome(p); p.occupant = a; a.setRank(i + 1); a.startIdle(i * 0.6); }
+      if (e) { const a = this.spawn(e); a.setHome(p); p.occupant = a; a.setRank(e.rank); a.startIdle(i * 0.6); }
       p.setBand(e ? { kind: "entry", entry: e } : { kind: "empty" }, false);
       p.startBob();
     });
@@ -84,9 +85,27 @@ export class Director {
     const moves = newTop.map((id, to) => ({ id, to, from: id ? oldTop.indexOf(id) : -1 })).filter(m => m.id && m.from >= 0 && m.from !== m.to) as { id: string; to: number; from: number }[];
     const enters = newTop.map((id, to) => ({ id, to })).filter(x => x.id && !oldTop.includes(x.id)) as { id: string; to: number }[];
 
+    // Retry improvements can create a cycle: each destination is occupied by
+    // another moving player. Rebuild this transition instead of waiting forever.
+    const hasCycle = moves.some(start => {
+      const visited = new Set<number>();
+      let move: typeof start | undefined = start;
+      while (move) {
+        if (visited.has(move.from)) return true;
+        visited.add(move.from);
+        move = moves.find(candidate => candidate.from === move!.to);
+      }
+      return false;
+    });
+    const lookChanged = next.slice(0, 3).some(entry => {
+      const actor = this.actors.get(entry.id);
+      return actor && JSON.stringify(actor.look) !== JSON.stringify(entry.look);
+    });
+    if (hasCycle || lookChanged) { this.hardSet(next); return; }
+
     // Nothing changes on the podium: refresh bands and the list only.
     if (!exits.length && !moves.length && !enters.length) {
-      this.places.forEach((p, i) => { const e = next[i]; if (e) p.setBand({ kind: "entry", entry: e }); });
+      this.places.forEach((p, i) => { const e = next[i]; if (e) { p.setBand({ kind: "entry", entry: e }); p.occupant?.setRank(e.rank); } });
       this.list.update(next.slice(3));
       return;
     }
@@ -175,7 +194,7 @@ export class Director {
     this.places.forEach((p, i) => {
       const e = next[i];
       if (e) p.setBand({ kind: "entry", entry: e });
-      if (p.occupant) { p.occupant.setHome(p); p.occupant.setRank(i + 1); p.occupant.startIdle(0.4); }
+      if (p.occupant) { p.occupant.setHome(p); p.occupant.setRank(e?.rank ?? i + 1); p.occupant.startIdle(0.4); }
       p.startBob();
     });
   }
