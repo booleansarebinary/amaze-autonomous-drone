@@ -1,0 +1,10 @@
+{
+  "description": "Monitor and control drone missions with a sleek dashboard featuring real-time telemetry, mission stats, and intuitive controls for enhanced flight management.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
