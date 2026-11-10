@@ -1,0 +1,39 @@
+# Prompts are local working material, not part of the image.
+local-prompts/
+**/local-prompts/
+Astrophage_Design_and_Codex_Prompts.md
+**/Astrophage_Design_and_Codex_Prompts.md
+**/codex-prompts.md
+
+# Version control and local configuration.
+.git
+**/.git
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+.ssh/
+**/.ssh/
+
+# Reproducible environments and generated outputs.
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+**/.pio/
+**/build/
+**/dist/
+**/logs/
+**/recordings/
+**/*.log
+Astrophage_Separated_Documents.zip
+
+# .dockerignore affects image builds, not Git tracking or bind mounts.

@@ -1,28 +1,21 @@
-# 1. Start with a standard Python base image
-FROM python:3.9-slim
+# Development tools only. Board-specific toolchains and mission dependencies
+# are added after hardware/repository inspection.
+FROM python:3.12-slim-bookworm
 
-# 2. Copy the official uv executable directly into your image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# 3. Set standard optimization environment variables for uv
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       cmake \
+       ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# 4. Set the working directory
-WORKDIR /app
+WORKDIR /workspace
 
-# 5. Copy configuration files first to utilize Docker layer caching
-COPY pyproject.toml uv.lock ./
+# .dockerignore excludes prompts, credentials, Git internals and generated data.
+# This is a snapshot: rebuild after editing host files.
+COPY . /workspace
 
-# 6. Install project dependencies without installing the project itself
-RUN uv sync --frozen --no-install-project
-
-# 7. Copy the rest of your application code
-COPY . .
-
-# 8. Complete the sync (installs your local project packages)
-RUN uv sync --frozen
-
-# 9. Expose port and run the app using 'uv run'
-EXPOSE 8080
-CMD ["uv", "run", "python", "-m", "myapp"]
+CMD ["sleep", "infinity"]

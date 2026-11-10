@@ -1,0 +1,15 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    init: true
+    command: ["sleep", "infinity"]
+    volumes:
+      # Only generated data is mounted; local prompt files stay off the container.
+      - type: bind
+        source: ./logs
+        target: /workspace/logs
+    # No radio/serial device, port or flight command is enabled by default.
+    # Add only confirmed devices and dependencies after inspecting the hardware.
