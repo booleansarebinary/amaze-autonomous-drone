@@ -1,5 +1,6 @@
 """Static-grid behavior tests; no sensors, radio, or flight commands."""
 
+import math
 import unittest
 from collections import deque
 
@@ -271,6 +272,106 @@ class AstarTests(unittest.TestCase):
                             self.assertIsNone(route)
                         else:
                             self.assert_valid_route(grid, route, start, goal, expected)
+
+
+class GridCoordinatesTests(unittest.TestCase):
+    def coordinates(self, grid=None, size=0.5, origin=(-1.0, -0.5)):
+        return grid_navigation.GridCoordinates(grid or Grid(4, 2), size, origin)
+
+    def test_centers_use_meters_origin_and_distinct_x_y_axes(self):
+        coordinates = self.coordinates()
+        self.assertEqual(coordinates.cell_center((0, 0)), (-0.75, -0.25))
+        self.assertEqual(coordinates.cell_center((2, 1)), (0.25, 0.25))
+        self.assertEqual(coordinates.cell_center((3, 0)), (0.75, -0.25))
+
+    def test_world_points_use_the_containing_cell_including_negative_positions(self):
+        coordinates = self.coordinates()
+        for point, cell in [
+            ((-0.9, -0.4), (0, 0)), ((-0.1, -0.2), (1, 0)),
+            ((0.2, 0.2), (2, 1)), ((0.9, 0.4), (3, 1)),
+        ]:
+            with self.subTest(point=point):
+                self.assertEqual(coordinates.world_to_cell(point), cell)
+
+    def test_cell_centers_round_trip_for_rectangular_maps(self):
+        for width, height, size, origin in [
+            (4, 2, 0.5, (-1.0, -0.5)), (2, 4, 0.25, (1.0, -2.0)),
+        ]:
+            coordinates = self.coordinates(Grid(width, height), size, origin)
+            for x in range(width):
+                for y in range(height):
+                    with self.subTest(width=width, height=height, cell=(x, y)):
+                        self.assertEqual(
+                            coordinates.world_to_cell(coordinates.cell_center((x, y))),
+                            (x, y),
+                        )
+
+    def test_internal_boundaries_belong_to_positive_side(self):
+        coordinates = self.coordinates()
+        self.assertEqual(coordinates.world_to_cell((-1.0, -0.5)), (0, 0))
+        self.assertEqual(coordinates.world_to_cell((-0.5, -0.25)), (1, 0))
+        self.assertEqual(coordinates.world_to_cell((-0.75, 0.0)), (0, 1))
+        self.assertEqual(coordinates.world_to_cell((0.0, 0.0)), (2, 1))
+
+    def test_points_just_inside_and_outside_boundaries_are_not_clamped(self):
+        # Map spans [-1, 1) on x and [-0.5, 0.5) on y.
+        coordinates = self.coordinates()
+        self.assertEqual(
+            coordinates.world_to_cell((math.nextafter(1.0, -math.inf), 0.25)), (3, 1)
+        )
+        self.assertEqual(
+            coordinates.world_to_cell((0.25, math.nextafter(0.5, -math.inf))), (2, 1)
+        )
+        for point in [
+            (1.0, 0.0), (0.0, 0.5),
+            (math.nextafter(-1.0, -math.inf), 0.0),
+            (0.0, math.nextafter(-0.5, -math.inf)),
+        ]:
+            with self.subTest(point=point):
+                with self.assertRaises(ValueError):
+                    coordinates.world_to_cell(point)
+
+    def test_decimal_cell_boundaries_use_the_configured_boundary_positions(self):
+        coordinates = self.coordinates(Grid(4, 2), 0.1, (0.0, 0.0))
+        edge = 3 * 0.1
+        self.assertEqual(coordinates.world_to_cell((edge, 0.05)), (3, 0))
+        self.assertEqual(
+            coordinates.world_to_cell((math.nextafter(edge, -math.inf), 0.05)), (2, 0)
+        )
+
+    def test_conversion_does_not_decide_obstacle_traversability(self):
+        grid = Grid(4, 2, blocked={(2, 1)})
+        coordinates = self.coordinates(grid)
+        self.assertEqual(coordinates.cell_center((2, 1)), (0.25, 0.25))
+        self.assertEqual(coordinates.world_to_cell((0.25, 0.25)), (2, 1))
+        self.assertFalse(grid.is_traversable((2, 1)))
+
+    def test_invalid_size_and_origin_are_rejected(self):
+        for size in [0, -0.5, True, "0.5", math.nan, math.inf]:
+            with self.subTest(size=size):
+                with self.assertRaises(ValueError):
+                    self.coordinates(size=size)
+        for origin in [(math.inf, 0), (0, math.nan), (True, 0), (0,), [0, 0], None]:
+            with self.subTest(origin=origin):
+                with self.assertRaises(ValueError):
+                    self.coordinates(origin=origin)
+
+    def test_invalid_cell_or_world_point_is_rejected(self):
+        coordinates = self.coordinates()
+        for cell in [(-1, 0), (4, 0), (0, 2), (0.5, 0), (True, 0), [0, 0]]:
+            with self.subTest(cell=cell):
+                with self.assertRaises(ValueError):
+                    coordinates.cell_center(cell)
+        for point in [(math.nan, 0), (0, math.inf), (False, 0), ("0", 0), (0,), [0, 0], None]:
+            with self.subTest(point=point):
+                with self.assertRaises(ValueError):
+                    coordinates.world_to_cell(point)
+
+    def test_unrepresentable_map_extents_or_cell_centers_are_rejected(self):
+        for size, origin in [(1e308, (0.0, 0.0)), (0.5, (1e16, 0.0))]:
+            with self.subTest(size=size, origin=origin):
+                with self.assertRaises(ValueError):
+                    self.coordinates(size=size, origin=origin)
 
 
 if __name__ == "__main__":

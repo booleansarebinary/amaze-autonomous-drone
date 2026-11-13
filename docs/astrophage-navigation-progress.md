@@ -549,3 +549,145 @@ It will test negative world coordinates and reject out-of-map points rather
 than clamp them. These conversions will issue no drone commands. Present
 the concrete conventions for review before implementing Chunk 5. Stop here
 for review; commit and push require explicit approval.
+
+Subsequent Git outcome: after approval, Chunk 4 was committed with its
+plain-language body as `e1b10fa` (`Verify grid routes with independent search
+and fault checks`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
+The preceding Git state records the original Chunk 4 review.
+
+## Chunk 5: physical coordinate conversion — PASS
+
+### Purpose, conventions, and files
+
+The conversion purpose and conventions were proposed at the Chunk 4 review;
+the instruction to commit/push Chunk 4 and continue authorized this chunk.
+This adds map-frame coordinates in meters without sending drone commands.
+
+- `algorithms/grid_navigation.py`: adds frozen `GridCoordinates`, configuration
+  validation, `cell_center`, `world_to_cell`, and `_validate_point`. It refers
+  to the existing `Grid`; there is no second occupancy map.
+- `algorithms/test_grid_navigation.py`: adds ten conversion tests.
+- This progress record adds conversion decisions and executed evidence.
+
+Cells are square with configurable `cell_size_m`. `origin_m` is the
+lower-left outer map boundary in meters, defaulting to `(0.0, 0.0)`.
+Map-frame +x/+y align with grid +x/+y: x indexes width, y indexes height.
+No rotation or measured-localization frame transform is implied.
+
+For cell `(x, y)`, the center is:
+
+```text
+world_x = origin_x + (x + 0.5) * cell_size_m
+world_y = origin_y + (y + 0.5) * cell_size_m
+```
+
+Cell-center coordinates are the intended future waypoint convention. A
+world point belongs to the cell whose lower edges are included and upper
+edges excluded. Thus an internal edge belongs to its positive side. The
+outer lower map boundaries are included; upper boundaries are outside.
+Out-of-map points raise `ValueError`; they are never silently clamped.
+
+The cell boundaries are the represented floating-point values
+`origin + index * cell_size_m`, with no implicit tolerance. The lookup
+compares these boundaries by repeatedly halving the candidate range of
+cells. This avoids subtraction/division rounding a point just inside an
+edge into the wrong cell. It uses logarithmic lookup and allocates no full
+boundary array. Numerical tolerance is not a substitute for measured
+localization uncertainty, which belongs in later physical validation.
+
+Sizes must be finite and positive; points/origin must be finite numeric
+two-tuples. Booleans are rejected. Construction also rejects overflowing
+map extents and configurations whose boundary-adjacent half-cell offsets
+cannot be represented at the configured coordinate magnitude. Cell queries
+reuse the existing integer coordinate and bounds validation.
+
+Conversion is independent of traversability: a blocked cell still has a
+physical location. A converted cell must pass the existing grid/planner
+checks before it can be used as a route endpoint.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Cell size, origin, axes, and meter units are explicit | PASS | Documented class/configuration and asymmetric coordinate examples |
+| Waypoints use cell centers | PASS | Center formula and exact expected coordinates |
+| Coordinates round-trip on rectangular grids | PASS | Every center on 4-by-2 and 2-by-4 maps converts back to its cell |
+| Negative world coordinates are supported | PASS | Nonzero negative origin and negative-point tests |
+| Internal boundaries belong to positive side | PASS | Separate x/y boundary tests, including decimal cell sizes |
+| Outer boundaries are explicit with no clamping | PASS | Exact upper edges/outside lower edges rejected; nearest inside values accepted |
+| Invalid cells, points, sizes, and origins are rejected | PASS | Type, shape, nonfinite, nonpositive, bounds, and representability cases |
+| Conversion remains separate from obstacle checks and commands | PASS | Blocked-cell conversion test; no flight/radio dependency or command path |
+
+### Test-first evidence and results
+
+Exact initial command, run from the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.GridCoordinatesTests -v
+```
+
+Nine tests were written first, followed by an empty conversion skeleton with
+the proposed fields and constant-return methods. Red result: exit 1,
+nine methods run, 47 behavioral assertion failures including subtests,
+zero errors, zero skips. The assertions exercised missing conversion and
+validation behavior rather than failing on an absent import. A tenth
+representability test was added before the full implementation.
+
+After implementing conversion, exact full-suite command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
+```
+
+Result: exit 0; all 38 methods passed, zero failures, zero errors, zero skips.
+This includes the existing 512 A*/independent-search comparison requests.
+Interpreter remains Python 3.14.7; no dependencies were installed. Python
+3.10 and Docker Python 3.12 were not separately executed.
+
+Mutation checks: NOT DUE in Chunk 5. The required clearance-removal and
+axis/unit faults are due in Chunk 6. No mutation artifacts were added here.
+No hardware, radio, or flight code was run.
+
+### Executed worked example
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates; coordinates = GridCoordinates(Grid(4, 2), 0.5, (-1.0, -0.5)); print('cell (2, 1) center in meters:', coordinates.cell_center((2, 1))); print('point (0.25, 0.25) cell:', coordinates.world_to_cell((0.25, 0.25))); print('internal boundary (0.0, 0.0) cell:', coordinates.world_to_cell((0.0, 0.0))); print('negative point (-0.9, -0.4) cell:', coordinates.world_to_cell((-0.9, -0.4)))"
+```
+
+Actual output, exit 0:
+
+```text
+cell (2, 1) center in meters: (0.25, 0.25)
+point (0.25, 0.25) cell: (2, 1)
+internal boundary (0.0, 0.0) cell: (2, 1)
+negative point (-0.9, -0.4) cell: (0, 0)
+```
+
+For the first result: `-1 + 2.5 * 0.5 = 0.25` on x, and
+`-0.5 + 1.5 * 0.5 = 0.25` on y. The map spans `[-1, 1)` on x and
+`[-0.5, 0.5)` on y. Coordinates `(1.0, 0.0)` and `(0.0, 0.5)` are rejected
+by the executed boundary tests.
+
+### Limitations, Git state, and next proposal
+
+These are coordinates in an assumed aligned map frame, not measured drone
+positions or evidence of physical tracking. Connecting an actual starting
+pose to a cell-center route remains unvalidated. Fixed-altitude suitability,
+frame alignment, localization quality, and physical clearance still require
+validation. No altitude value, follower, radio connection, or flight command
+was introduced. Offline coordinate conversion proves no flight readiness.
+
+Chunk 4 was committed and pushed as approved before this work. Chunk 5's
+module, tests, and progress-record changes remain unstaged and uncommitted;
+no Chunk 5 commit or push was made. Pre-existing README modifications and
+deletions of `docs/architecture.md`, `docs/decisions.md`, and
+`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
+tracking `origin/MAIN_collect_the_astrophage`, with no outgoing commits
+against the cached upstream. Whitespace verification uses `git diff --check`.
+
+Next proposed purpose: Chunk 6 will reserve room for a provisional drone
+footprint plus configurable uncertainty margin, using cell geometry and
+arena boundaries. A route through a narrow gap may become unavailable while
+a wider route remains. Present the footprint, margin, and collision rules
+for review before implementing that chunk. Stop here for Chunk 5 review;
+committing and pushing this change require separate explicit approval.

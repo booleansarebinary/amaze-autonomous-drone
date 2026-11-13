@@ -7,6 +7,7 @@ Physical use requires validating the altitude model and localization.
 """
 
 import heapq
+import math
 from dataclasses import dataclass
 from itertools import count
 
@@ -118,3 +119,80 @@ def astar(grid: Grid, start: Cell, goal: Cell) -> list[Cell] | None:
                 )
 
     return None
+
+
+@dataclass(frozen=True)
+class GridCoordinates:
+    """Square cells in meters with aligned +x/+y world and grid axes.
+
+    origin_m is the lower-left outer boundary, not cell (0, 0)'s center.
+    This defines a map frame; alignment with measured localization is unverified.
+    """
+
+    grid: Grid
+    cell_size_m: float
+    origin_m: tuple[float, float] = (0.0, 0.0)
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.cell_size_m) not in (int, float)
+            or not math.isfinite(self.cell_size_m)
+            or self.cell_size_m <= 0
+        ):
+            raise ValueError("cell_size_m must be a finite positive number")
+        self._validate_point(self.origin_m)
+        for origin, cells in zip(self.origin_m, (self.grid.width, self.grid.height)):
+            upper = origin + cells * self.cell_size_m
+            half_cell = self.cell_size_m / 2
+            if (
+                not math.isfinite(upper)
+                or origin + half_cell == origin
+                or upper - half_cell == upper
+            ):
+                raise ValueError("map extents and cell centers must be representable")
+
+    @staticmethod
+    def _validate_point(point_m: tuple[float, float]) -> None:
+        if (
+            not isinstance(point_m, tuple)
+            or len(point_m) != 2
+            or any(type(value) not in (int, float) or not math.isfinite(value)
+                   for value in point_m)
+        ):
+            raise ValueError("world point must be an (x, y) tuple of finite numbers in meters")
+
+    def cell_center(self, cell: Cell) -> tuple[float, float]:
+        """Return an in-bounds cell's center, including for blocked cells."""
+        if not self.grid.in_bounds(cell):
+            raise ValueError(f"cell outside grid: {cell}")
+        x, y = cell
+        origin_x, origin_y = self.origin_m
+        return (
+            origin_x + (x + 0.5) * self.cell_size_m,
+            origin_y + (y + 0.5) * self.cell_size_m,
+        )
+
+    def world_to_cell(self, point_m: tuple[float, float]) -> Cell:
+        """Find the containing cell; lower edges included, upper edges excluded.
+
+        Internal boundaries belong to the positive side. Boundaries are the
+        represented float values origin + index * cell_size_m, with no tolerance.
+        """
+        self._validate_point(point_m)
+        indices = []
+        for value, origin, cells in zip(
+            point_m, self.origin_m, (self.grid.width, self.grid.height)
+        ):
+            if not origin <= value < origin + cells * self.cell_size_m:
+                raise ValueError(f"world point outside grid: {point_m}")
+            # Compare boundaries instead of dividing: subtraction/division can
+            # round a point just below an edge into the cell on its other side.
+            lower, upper = 0, cells
+            while lower + 1 < upper:
+                middle = (lower + upper) // 2
+                if value < origin + middle * self.cell_size_m:
+                    upper = middle
+                else:
+                    lower = middle
+            indices.append(lower)
+        return (indices[0], indices[1])
