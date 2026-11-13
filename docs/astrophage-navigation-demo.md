@@ -44,10 +44,9 @@ Cells: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
 ```
 
 Output is labeled `Planned route (offline)`. Default output is text, with
-optional PNG pictures described below. It is not a measurement log or a
-route-export file. A later subchunk will add planned-route JSON
-export. The three examples produce five steps, four steps, and no route,
-respectively.
+optional PNG pictures and planned-route JSON export described below.
+All outputs describe offline plans. The three examples produce five steps,
+four steps, and no route, respectively.
 
 ## Optional clearance
 
@@ -97,8 +96,51 @@ command still exits with code 1.
 
 Text-only operation does not import Matplotlib. Requesting a picture without
 the optional packages produces an installation message and exit code 2.
-Image output errors also use exit code 2. Planned-route JSON export remains
-a separate later subchunk.
+Image output errors also use exit code 2. JSON export is available separately
+or together with a picture, as described below.
+
+## Save the plan as JSON
+
+Add `--export` with a new destination to save the plan and its settings.
+This uses the standard library and does not require Matplotlib:
+
+```powershell
+$planPath = Join-Path ([IO.Path]::GetTempPath()) 'astrophage-detour-plan.json'
+python -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --export "$planPath"
+```
+
+The export's schema version is 1, and `data_kind` is always `planned_route`.
+It records:
+
+| Field | Meaning |
+|---|---|
+| `status` | `route_found` or `unreachable` |
+| `map` | Width, height, and original blocked cells |
+| `planning_blocked` | Cells blocked after optional clearance |
+| `start`, `goal` | Supplied `[x, y]` grid coordinates |
+| `movement` | Four directions, unit step cost, Manhattan distance |
+| `coordinates` | Cell units, axis/order conventions, cell-center waypoints, assumed unvalidated fixed altitude, and any physical scale |
+| `clearance` | Whether clearance is enabled and the supplied radius/margin |
+| `route`, `steps` | Route including both endpoints, and its number of steps |
+
+For the detour, the route is `[[0,0],[0,1],[1,1],[2,1],[2,0]]` and `steps`
+is 4. A valid map with no route is still exported, with `status: "unreachable"`,
+`route: null`, and `steps: null`; the command exits 1. A valid start equal
+to goal has a one-cell route and zero steps. Invalid requests exit 2.
+
+Without physical settings, `cell_size_m`, `origin_m`, radius, and margin
+are `null`. With the existing clearance flags, the supplied size, radius,
+and margin are saved, along with the CLI's assumed origin `[0.0, 0.0]` meters.
+The route itself always uses grid cells. No measured position or altitude
+is invented. The same plan produces the same JSON content, with sorted
+obstacle lists. Nonfinite numbers are rejected before creating the file.
+
+The parent directory must exist; existing files and the input map are never
+overwritten. Keep generated exports outside commits. You may combine
+`--plot` and `--export`, using different output filenames. They are separate
+writes: the picture is saved first, so it may remain if a later JSON write
+fails. Output errors use exit code 2. An export records a plan; it is not a
+measurement log or a command to fly.
 
 ## Exit codes and limitations
 

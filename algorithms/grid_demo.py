@@ -59,11 +59,17 @@ def main(argv=None) -> int:
     parser.add_argument("--footprint-radius-m", type=float, help="provisional enclosing radius")
     parser.add_argument("--margin-m", type=float, help="provisional extra clearance")
     parser.add_argument("--plot", type=Path, help="save an optional PNG to a new file")
+    parser.add_argument("--export", type=Path, help="save the planned route and settings as new JSON")
     args = parser.parse_args(argv)
     start, goal = tuple(args.start), tuple(args.goal)
     clearance_values = (args.cell_size_m, args.footprint_radius_m, args.margin_m)
     clearance_enabled = any(value is not None for value in clearance_values)
     try:
+        if args.export is not None:
+            if args.export.resolve() == args.map.resolve():
+                raise ValueError("export output must differ from the input map")
+            if args.plot is not None and args.export.resolve() == args.plot.resolve():
+                raise ValueError("plot and export destinations must differ")
         grid = load_grid(args.map)
         original_grid = grid
         if clearance_enabled:
@@ -78,6 +84,13 @@ def main(argv=None) -> int:
                 raise ValueError("plot output must differ from the input map")
             from algorithms.grid_plot import save_route_plot
             save_route_plot(args.plot, original_grid, grid, start, goal, route)
+        if args.export is not None:
+            from algorithms.grid_export import save_plan
+            save_plan(
+                args.export, original_grid, grid, start, goal, route,
+                cell_size_m=args.cell_size_m, footprint_radius_m=args.footprint_radius_m,
+                margin_m=args.margin_m,
+            )
     except (OSError, ValueError, RuntimeError) as exc:
         parser.error(str(exc))
 
@@ -91,6 +104,8 @@ def main(argv=None) -> int:
     print(render_grid(grid, start, goal, route))
     if args.plot is not None:
         print(f"Plot saved: {args.plot}")
+    if args.export is not None:
+        print(f"Plan exported: {args.export}")
     if route is None:
         print("No planned route exists between the supplied cells.")
         return 1

@@ -1190,3 +1190,167 @@ Next proposed purpose: Chunk 7C will export the planned route and relevant
 supplied configuration as valid JSON, explicitly identified as planned data.
 Review the schema, unreachable representation, and output-file behavior before
 implementation. Stop here for review; commit/push need explicit approval.
+
+## Chunk 7C: planned-route JSON export — PASS
+
+### Scope, preserved work, and files
+
+The export purpose was proposed at the Chunk 7B review and authorized by
+the instruction to continue. That instruction did not authorize a commit
+or push. Chunk 7B remains uncommitted. Before this work, its seven files were
+copied and hash-checked in the temporary review snapshot
+`C:\Users\victo\AppData\Local\Temp\astrophage-7b-before-7c-0emnr3qi`.
+This preserves a basis for reviewing/staging the two changes separately;
+no branch, index, or Git history was changed to create the snapshot.
+
+- `algorithms/grid_export.py`: adds `save_plan`, which serializes the existing
+  planner's validated result and supplied configuration, then creates a new
+  JSON file. It does not implement another planner or measurement logger.
+- `algorithms/grid_demo.py`: adds `--export`, output-path checks, the save call,
+  and a confirmation message. Search, clearance, plotting, and exit semantics
+  are reused.
+- `algorithms/test_grid_export.py`: ten focused export tests, including real
+  subprocess operation and optional combined PNG/JSON generation.
+- Demo guide and this record document schema, commands, and evidence.
+
+### Schema and behavior
+
+Schema version 1 has `data_kind: "planned_route"`. It records original map
+dimensions/obstacles, the final planning blocked cells, supplied endpoints,
+four-direction/unit-cost/Manhattan movement settings, coordinate conventions,
+cell-center waypoint meaning, and the assumed unvalidated fixed-altitude model.
+Radius, margin, physical cell size, and the CLI's zero origin are saved when
+configured. A grid-only run leaves physical scale/origin/radius/margin null;
+the route remains in cells in every case. No measured pose or altitude value
+is invented, and no real/fake target identity enters the export or planner.
+
+`status: "route_found"` has a route including both endpoints and its step
+count. Start equal to goal retains one cell and zero steps. A valid map with
+no route exports `status: "unreachable"`, `route: null`, and `steps: null`,
+while retaining exit code 1. Input/output errors use the existing exit code 2.
+
+Sorted obstacle lists and keys, with no generated timestamp, make equal
+plans produce identical content. `json.dumps(..., allow_nan=False)` builds
+strict JSON before opening the destination, rejecting NaN/infinity without
+creating a malformed file. Exclusive creation preserves existing files.
+Input-map aliases and identical plot/export destinations are rejected.
+Missing parent directories are reported rather than created implicitly.
+
+When both outputs are requested, plotting happens first and JSON second.
+These are separate writes, not a transaction: a successful PNG may remain
+if the later JSON write fails. Neither output overwrites existing files.
+Generated exports stay outside Git, as do the review snapshot and PNGs.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Valid JSON identifies planned data and preserves route/endpoints | PASS | Real subprocess detour export parsed and checked |
+| Preserve supplied map, planning exclusions, and movement settings | PASS | Original/derived obstacles and unit-cost/Manhattan metadata assertions |
+| Record physical settings only when configured | PASS | Null physical frame for grid-only input; explicit settings and zero origin for clearance input |
+| Distinguish unreachable from zero-step success | PASS | Null route/steps with exit 1 versus one-cell route/zero steps with exit 0 |
+| Export without Matplotlib | PASS | Original environment and blocked-import test |
+| Preserve existing files and input map | PASS | Existing destination bytes and original JSON remain unchanged |
+| Reject plot/export filename collision before writing | PASS | Error message and absence of output file |
+| Reject nonfinite numbers before file creation | PASS | Direct serialization test raises and leaves no file |
+| Deterministic content and sorted obstacle lists | PASS | Two independent destination files have identical bytes |
+| Support PNG and JSON together when plotting is installed | PASS | Real subprocess generates both files and valid route metadata |
+
+### Exact test commands and actual results
+
+Before edits, the preserved Chunk 7B state passed all 64 methods in the
+existing temporary plotting environment. Ten export tests were then written
+before implementation, with an empty writer and no CLI export option.
+Exact red command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_export -q
+```
+
+Red result: exit 1; ten methods, eight behavioral assertion failures,
+zero errors, one optional combined-image test skipped. The missing-parent
+case alone could not distinguish the empty CLI from the desired error result;
+other assertions detected the missing export behavior and file creation.
+
+After implementing the writer and CLI integration, exact full-suite commands:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export -q
+$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export -q
+```
+
+- Without Matplotlib: exit 0; 68 passed, six optional image tests skipped,
+  zero failures/errors (74 methods total).
+- With Matplotlib 3.11.2: exit 0; all 74 passed, zero failures/errors/skips.
+
+Both environments use Python 3.14.7. Existing independent map comparisons
+remain included. No new dependency, hardware, radio, or flight operation.
+No implementation failures remained after replacing the empty writer and
+adding the CLI option. Mutation checks are NOT DUE for this export subchunk;
+the next required checkpoint is candidate/return behavior in Chunk 8.
+
+### Executed examples
+
+Exact commands, run from the repository root with fresh output filenames:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\open.json
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\detour.json
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\unreachable.json
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/clearance.json --start 1 2 --goal 5 2 --cell-size-m 0.25 --footprint-radius-m 0.1 --margin-m 0.05 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\clearance.json
+```
+
+| Example | Actual export result | Exit |
+|---|---|---:|
+| Open map | `route_found`, five steps | 0 |
+| Detour | `route_found`, four steps | 0 |
+| Unreachable | `unreachable`, null route/steps | 1 |
+| Clearance | `route_found`, four steps and supplied settings | 0 |
+
+All four files were read with `json.loads` using a rejecting `parse_constant`
+callback to exclude nonstandard numeric constants; all parsed successfully.
+Actual detour excerpt (other schema fields omitted here):
+
+```json
+{
+  "schema_version": 1,
+  "data_kind": "planned_route",
+  "status": "route_found",
+  "route": [[0, 0], [0, 1], [1, 1], [2, 1], [2, 0]],
+  "steps": 4
+}
+```
+
+The full file also records obstacle `(1, 0)`, both endpoints, movement rules,
+and null physical scale because that invocation supplied grid coordinates
+only. These exports are plans, not measured flight data.
+
+### Limitations, Git state, and next proposal
+
+Export does not execute or follow a route, supply measured localization,
+discover obstacles, identify candidates, or validate physical flight. Meter
+origin currently follows the CLI's zero-origin convention when configured;
+arbitrary world origins remain supported by the separate conversion class.
+Fixed-altitude suitability, physical dimensions, map/frame accuracy, tracking,
+and the actual-start-to-route connection remain unvalidated.
+
+Chunk 7B and Chunk 7C both remain unstaged and uncommitted. No commit or push
+was performed this turn; only the already-pushed Chunk 7A is in HEAD.
+Chunk 7C changes the new export module/tests and the CLI/guide/progress record.
+The earlier plot module, its requirements, plot tests, and existing CLI tests
+are preserved. Git's cumulative diff includes both uncommitted chunks;
+Chunk 7C's incremental review uses the preserved Chunk 7B snapshot.
+Existing README changes and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch
+remains `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
+No outgoing commits exist against the cached upstream. Generated JSON, PNGs,
+snapshots, and temporary environments remain outside commits. Whitespace
+checks cover the new export files and tracked changes.
+
+Next proposed purpose: split Chunk 8 into candidate selection/visit tracking
+and a later simulated-detection/return subchunk. Before implementation,
+inspect any existing mission-controller code again, then review a simple
+supplied-order policy, explicit unreachable/no-target outcomes, and what
+counts as a completed visit. No hidden identity or hardware event is needed
+for candidate routing. Stop here for review; commit/push need explicit approval.
