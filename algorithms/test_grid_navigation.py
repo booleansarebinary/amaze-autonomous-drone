@@ -2,6 +2,7 @@
 
 import unittest
 
+from algorithms import grid_navigation
 from algorithms.grid_navigation import Grid
 
 
@@ -76,6 +77,36 @@ class GridTests(unittest.TestCase):
                 with self.subTest(query=query.__name__, cell=cell):
                     with self.assertRaises(ValueError):
                         query(cell)
+
+
+class ManhattanDistanceTests(unittest.TestCase):
+    def test_goal_itself_has_zero_distance(self):
+        self.assertEqual(grid_navigation.manhattan_distance((3, 2), (3, 2)), 0)
+
+    def test_horizontal_distance_in_both_directions(self):
+        self.assertEqual(grid_navigation.manhattan_distance((1, 2), (5, 2)), 4)
+        self.assertEqual(grid_navigation.manhattan_distance((5, 2), (1, 2)), 4)
+
+    def test_vertical_distance_in_both_directions(self):
+        self.assertEqual(grid_navigation.manhattan_distance((3, 1), (3, 6)), 5)
+        self.assertEqual(grid_navigation.manhattan_distance((3, 6), (3, 1)), 5)
+
+    def test_mixed_axes_add_independent_step_counts(self):
+        for start, goal, expected in [
+            ((1, 2), (4, 6), 7),
+            ((4, 6), (1, 2), 7),
+            ((1, 6), (4, 2), 7),
+            ((-2, 3), (1, -1), 7),
+        ]:
+            with self.subTest(start=start, goal=goal):
+                self.assertEqual(grid_navigation.manhattan_distance(start, goal), expected)
+
+    def test_malformed_endpoint_is_rejected(self):
+        for invalid in [(1.5, 2), (True, 2), (1,), [1, 2], None]:
+            for start, goal in [(invalid, (0, 0)), ((0, 0), invalid)]:
+                with self.subTest(start=start, goal=goal):
+                    with self.assertRaises(ValueError):
+                        grid_navigation.manhattan_distance(start, goal)
 
 
 if __name__ == "__main__":

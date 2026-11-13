@@ -21,6 +21,18 @@ def _validate_cell(cell: Cell) -> None:
         raise ValueError("cell must be an (x, y) tuple of integers")
 
 
+def manhattan_distance(start: Cell, goal: Cell) -> int:
+    """Minimum cardinal unit steps when obstacles are ignored.
+
+    Each step changes exactly one axis by one. Obstacles can add steps,
+    so this never overestimates a reachable goal's shortest route cost.
+    This calculation is independent of map bounds or obstacle membership.
+    """
+    _validate_cell(start)
+    _validate_cell(goal)
+    return abs(start[0] - goal[0]) + abs(start[1] - goal[1])
+
+
 @dataclass(frozen=True)
 class Grid:
     """Finite occupancy grid; dimensions and obstacle membership cannot change."""

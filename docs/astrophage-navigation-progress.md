@@ -122,3 +122,125 @@ untouched. No prompts, logs, or temporary artifacts were added.
 Next proposed chunk: Manhattan distance with goal, single-axis, and mixed-axis
 tests, followed by isolated boundary and distance mutation checks. Stop for
 review before beginning that chunk.
+
+Subsequent Git outcome: after separate approval, Chunk 1 was committed as
+`72969d3` (`Add static occupancy grid and cardinal neighbors`) and pushed
+alone to `origin/MAIN_collect_the_astrophage`. The status above records the
+state at the original Chunk 1 review.
+
+## Chunk 2: Manhattan-distance heuristic — PASS
+
+### Changes and explanation
+
+- `algorithms/grid_navigation.py`: adds `manhattan_distance(start, goal)`.
+  It reuses `_validate_cell`, then adds the absolute x and y differences.
+- `algorithms/test_grid_navigation.py`: adds five test methods covering the
+  goal itself, horizontal and vertical movement in both directions, mixed-axis
+  cases, and malformed endpoints. Existing nine grid tests remain unchanged.
+- This record adds the acceptance evidence and controlled mutation results.
+
+The calculation is `abs(start_x - goal_x) + abs(start_y - goal_y)`. A legal
+step changes exactly one axis by one cell at cost one, so the result is the
+shortest distance on an obstacle-free grid. Obstacles can require extra steps;
+the calculation never overestimates a reachable goal's shortest route cost
+(an admissible heuristic). Across any legal adjacent step its value changes
+by at most one, matching the unit step cost (a consistent heuristic).
+
+This helper is independent of a map: it accepts integer coordinate tuples,
+including negative coordinates, but does not decide whether they are valid
+endpoints on a particular grid. Endpoint traversability belongs to the later
+search. It returns a cell-step count, not meters or flight time. There is
+still no A* search in this chunk. The small formula needs only 12 production
+lines including its explanation, rather than padding it to the chunk guide.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Goal itself has distance zero | PASS | Goal-itself test returns 0 |
+| Either axis counts unit steps in both directions | PASS | Horizontal returns 4; vertical returns 5 |
+| Mixed axes sum their step counts | PASS | Four mixed cases return 7, including opposite signs |
+| Reuse integer tuple validation for both endpoints | PASS | Malformed-endpoint subtests reject either endpoint |
+| Match four-direction, unit-cost assumptions | PASS | Formula and admissibility/consistency reasoning above |
+| Boundary fault detected by existing behavioral assertions | PASS | Inclusive-width mutant fails intended bounds assertion |
+| Distance fault detected by behavioral assertions | PASS | Missing-y mutant fails intended vertical assertion |
+| Restore correct code and rerun normal tests | PASS | Both temporary restorations and final worktree suite pass |
+
+### Tests and worked example
+
+All commands below use the existing Python 3.14.7 interpreter, with `-B`
+preventing bytecode artifacts. Run from the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
+```
+
+Tests were added before the function. The first run exited 1: the existing
+nine grid tests passed, but the five new methods could not call the absent
+function (`AttributeError`, 17 error reports including subtests). These were
+missing-function errors, not assertion failures. Adding the function resolved
+them. After implementation and again after mutation checks, exit 0: 14 tests
+passed, zero failures, zero errors, zero skips.
+
+Executed worked example:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import manhattan_distance; print('same cell:', manhattan_distance((3, 2), (3, 2))); print('horizontal:', manhattan_distance((1, 2), (5, 2))); print('vertical:', manhattan_distance((3, 1), (3, 6))); print('mixed:', manhattan_distance((1, 2), (4, 6)))"
+```
+
+Actual output, exit 0:
+
+```text
+same cell: 0
+horizontal: 4
+vertical: 5
+mixed: 7
+```
+
+The mixed case needs at least three horizontal and four vertical moves.
+It does not demonstrate that a route exists through any supplied obstacles.
+
+### Controlled mutation checkpoint
+
+Exact executed command (temporary driver is outside the repository):
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk2_mutation_check.py
+```
+
+The driver copied only the actual navigation module and unchanged tests into
+an isolated temporary package. Each subprocess ran the same unittest command
+above from that copy, with `PYTHONPATH` removed. No sensor, radio, or flight
+module was included or executed. Baseline: 14 tests passed. Faults were
+injected one at a time into the copied production module.
+
+| Fault | Intended detecting test | Actual result |
+|---|---|---|
+| Change `x < self.width` to `x <= self.width` in `Grid.in_bounds` | `test_rectangular_bounds_use_x_for_width_and_y_for_height` | Exit 1; rejects mutant because `(4, 0)` incorrectly returns true for width 4. Seven assertion failures across bounds, neighbors, traversability, and validation; no errors. |
+| Omit the y-distance term from `manhattan_distance` | `test_vertical_distance_in_both_directions` | Exit 1; rejects mutant because distance is 0 instead of 5. Five assertion failures including four mixed-axis cases; no errors. |
+
+No mutant survived. Syntax, import, or infrastructure failures were not used
+as detection evidence. The original implementation was restored after each
+fault and the temporary suite passed all 14 tests each time. Tests remained
+byte-for-byte unchanged, and SHA-256 checks confirmed that the working-tree
+module and tests were never altered by the driver. The temporary package was
+removed after its resolved location was checked inside the system temporary
+directory. Driver exit: 0; cleanup confirmed. The external driver is not a
+tracked artifact and is not part of the proposed commit.
+
+### Git state, limitations, and next chunk
+
+Chunk 2 changes only the existing navigation module, its tests, and this
+progress record. They remain unstaged and uncommitted; no commit or push was
+performed for Chunk 2. No outgoing commit exists against the cached mission
+upstream. The pre-existing README change and three documentation deletions
+remain untouched. `git diff --check` passes.
+
+Limitations: no search, physical conversion, clearance inflation, or follower.
+No hardware or flight evidence was obtained. Fixed-altitude suitability and
+localization still require physical validation. A different movement or cost
+model would require reassessing this heuristic.
+
+Next proposed chunk: smallest complete A* search, adapting the existing
+search structure identified in Chunk 0. Stop here for review; commit and
+push of Chunk 2 require separate explicit approval.
