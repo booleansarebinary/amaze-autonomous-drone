@@ -880,3 +880,153 @@ small. Review the first subchunk's supplied map/start/goal input and text
 output before implementation. It will use the existing planner without a
 dashboard, sensor, or radio dependency. Stop here for Chunk 6 review;
 commit and push require separate explicit approval.
+
+Subsequent Git outcome: after approval, Chunk 6 was committed with its
+plain-language body as `bb582f5` (`Reserve space around obstacles and arena
+walls`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
+The preceding Git state records its original review.
+
+## Chunk 7A: text-only offline demonstration — PASS
+
+### Scope and files
+
+The proposed text demo was reviewed and authorized. Chunk 7 is split so this
+change does not also introduce plotting and route export. It accepts a map,
+start, and goal, invokes existing planning behavior, and displays text.
+
+- `algorithms/grid_demo.py`: `load_grid` reads the supplied map, `render_grid`
+  displays the grid and route, and `main` handles arguments, optional clearance,
+  errors, and exit status. Existing planning/conversion/inflation code is reused
+  unchanged. No parallel search, new dependency, or hardware adapter is added.
+- `algorithms/test_grid_demo.py`: nine CLI tests, including a subprocess test
+  of the actual `python -m algorithms.grid_demo` entry point.
+- `examples/navigation/open.json`, `detour.json`, `unreachable.json`, and
+  `clearance.json`: small manually supplied maps for reproducible commands.
+- `docs/astrophage-navigation-demo.md`: map schema, commands, symbols, optional
+  clearance, exit codes, and limitations.
+- This record captures executed evidence.
+
+Maps contain required positive integer `width` and `height`, plus optional
+`blocked` integer `[x, y]` pairs. Other fields are rejected. The JSON arrays
+are converted to the existing integer tuple representation. Grid validates
+dimensions and obstacle bounds. Start/goal arguments are grid coordinates.
+
+The printed map displays highest y first, placing `(0, 0)` at lower left.
+`S` is start, `G` goal, `B` both, `*` route, `#` blocked, and `.` free.
+Endpoints are included in the printed coordinate list. Output is explicitly
+labeled `Planned route (offline)`; no generated route file is written.
+
+Optional `--cell-size-m`, `--footprint-radius-m`, and `--margin-m` must all be
+supplied together. They call the existing clearance function before planning.
+Otherwise, output states `Clearance: not applied (point grid)`. Displayed `#`
+cells include clearance exclusions when enabled. No default physical radius
+or margin is assumed. Invalid/excluded endpoints produce an error, distinct
+from valid endpoints with no route. The input map is never rewritten.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Accept supplied map, start, and goal without hardware | PASS | Module entry point and in-process CLI tests |
+| Show a labeled planned route with explicit grid axes | PASS | Open and detour display assertions |
+| Distinguish invalid input from no route | PASS | Exit 2 with stderr for invalid input; exit 1 for disconnected valid endpoints |
+| Handle start equal to goal | PASS | `B` marker and zero-step route |
+| Reuse clearance when explicitly configured | PASS | Narrow corridor is disconnected using supplied physical settings |
+| Reject incomplete/invalid clearance settings | PASS | Partial flags and negative radius cases |
+| Supply open, detour, and unreachable examples | PASS | All three commands executed; fourth clearance example also executed |
+| Report malformed or missing files without traceback | PASS | Invalid schema/JSON/nested coordinate and missing-file tests |
+
+### Test-first sequence, failures, and results
+
+Exact initial command, from the repository root with Python 3.14.7:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_demo -q
+```
+
+Eight CLI tests were written first. An empty `main` returning 0 let the tests
+exercise missing output and error handling. Red result: exit 1; eight methods,
+18 behavioral assertion failures including subtests, zero errors/skips.
+The first implementation passed all then-current 56 tests.
+
+An additional nested-coordinate case and a ninth missing-file test were added
+during input review. The CLI-only suite then exited 1 with one error: a nested
+list coordinate reached set construction and raised `TypeError`. The loader
+was corrected to reject noninteger coordinates before hashing them. This was
+an input-validation failure and fix, not mutation evidence.
+
+Exact final full-suite command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo -q
+```
+
+Result: exit 0; 57 methods passed, zero failures, zero errors, zero skips.
+This includes the existing 512 independent shortest-path comparisons.
+The real subprocess test captures stdout/stderr and validates the detour's
+map, route, and successful process exit. Other tests use the same `main`
+function with temporary supplied maps. No generated test file remains in
+the repository. No dependencies were installed, and no hardware was touched.
+
+Mutations: NOT DUE for this interface subchunk. The Chunk 6 checkpoint remains
+recorded above; no new deliberate faults or mutation artifacts were created.
+
+### Executed commands and worked output
+
+All four commands below were executed exactly, from the repository root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/clearance.json --start 1 2 --goal 5 2 --cell-size-m 0.25 --footprint-radius-m 0.1 --margin-m 0.05
+```
+
+| Input | Actual result | Exit |
+|---|---|---:|
+| Open 4-by-3 map, `(0, 0)` to `(3, 2)` | Five-step route | 0 |
+| 3-by-2 detour, obstacle `(1, 0)`, `(0, 0)` to `(2, 0)` | Four-step route | 0 |
+| 3-by-2 unreachable, obstacles `(1, 0)` and `(1, 1)` | No planned route | 1 |
+| Empty 7-by-5 map with test clearance settings | Four-step route; outermost cells excluded | 0 |
+
+Actual complete detour output:
+
+```text
+Planned route (offline)
+Grid cells: x right, y up; (0, 0) at lower left.
+Clearance: not applied (point grid).
+S=start, G=goal, B=start and goal, *=route, #=blocked, .=free
+***
+S#G
+Steps: 4
+Cells: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
+```
+
+The direct step east is blocked, so the route goes up, across, and down.
+The clearance example used test values only: 0.25 m cells, 0.10 m radius,
+0.05 m margin. These results are planned grid routes, not measured flight data.
+
+### Limitations, Git state, and next proposal
+
+Output is text only. Plotting and valid planned-route JSON export are deferred
+to separate review subchunks. The map is manually supplied; there is no
+obstacle discovery, target identity input, candidate policy, or follower.
+Fixed-altitude suitability, map/localization alignment, footprint dimensions,
+tracking error, and the measured-start-to-route connection need validation
+before physical use. The demo establishes no physical flight readiness.
+
+Chunk 6 was committed and pushed before this work. Chunk 7A's new module,
+tests, four example maps, user guide, and progress changes remain unstaged
+and uncommitted. No Chunk 7A commit or push was made. The existing README
+change and deletions of `docs/architecture.md`, `docs/decisions.md`, and
+`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
+tracking `origin/MAIN_collect_the_astrophage`, with no outgoing commits
+against the cached upstream. Whitespace checks cover the new files as well
+as tracked changes; no prompts, logs, or temporary artifacts were added.
+
+Next proposed purpose: Chunk 7B will add an optional plot of the supplied map
+and planned route, assessing reuse of the existing plotting facilities first.
+It will preserve text-only operation without a plotting dependency, distinguish
+planned routes from measured data, and handle no-route examples. Planned-route
+JSON export follows separately. Review plotting scope and dependency handling
+before implementation. Stop here for review; commit/push need explicit approval.
