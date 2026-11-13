@@ -394,3 +394,158 @@ compare shortest lengths with an independently written breadth-first-search
 test oracle, and challenge obstacle checking and reconstruction with isolated
 faults. Its purpose must be reviewed before implementation begins. Stop here
 for Chunk 3 review; commit and push also require explicit approval.
+
+Subsequent Git outcome: Chunk 3 was committed with the approved plain-language
+body as `340ce02` (`Add A* search for static grid routes`) and pushed alone
+to `origin/MAIN_collect_the_astrophage`. The Git state above records its
+original review.
+
+## Chunk 4: planner edge cases and independent verification — PASS
+
+### Purpose, changes, and behavior
+
+The previously proposed verification scope was authorized before starting.
+This chunk checks existing behavior more thoroughly; no production change
+was needed. The A* module is unchanged from Chunk 3.
+
+- `algorithms/test_grid_navigation.py`: adds `breadth_first_steps`, seven test
+  methods, and stronger independent assertions in `assert_valid_route`.
+- This progress record documents coverage, executed results, and mutations.
+
+Breadth-first search explores cells in order of the number of steps needed
+to reach them, using a first-in/first-out queue (`collections.deque`). With
+equal step costs, the first arrival at the goal has the shortest length.
+This test-only checker uses raw dimensions and blocked-cell coordinates,
+its own movement/bounds checks, and a different movement order. It calls no
+production neighbor, traversability, heuristic, or search function and does
+not reconstruct a route. Its valid-input behavior is checked against four
+hand-counted examples: open map, detour, disconnected map, and start at goal.
+
+For each returned A* route, independent assertions check both endpoints,
+integer tuple coordinates, map bounds, blocked-cell exclusion, and one-cell
+horizontal/vertical moves. Length is compared with the independent answer;
+an unreachable result must be `None`. The assertions do not demand the same
+route when multiple shortest routes exist.
+
+The deterministic comparison covers all obstacle combinations except the
+two fixed free opposite-corner endpoints on three shapes:
+
+| Shape | Optional obstacle cells | Maps | Requests, both directions |
+|---|---:|---:|---:|
+| 3 by 3 | 7 | 128 | 256 |
+| 4 by 2 | 6 | 64 | 128 |
+| 2 by 4 | 6 | 64 | 128 |
+| Total | | 256 | 512 |
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Invalid inputs are distinct from a valid map with no route | PASS | Invalid endpoints raise `ValueError`; barriers/enclosures return `None` |
+| Start equals goal still requires a valid free cell | PASS | Single-cell route succeeds; blocked/outside same-cell requests raise |
+| Both endpoints reject every map boundary and malformed cells | PASS | Negative/upper x/y limits, floats, bools, NaN/infinity, wrong tuple size, list, string, and None |
+| Detours and narrow passages remain valid | PASS | Existing detour plus 5-by-5 wall-gap example requiring eight steps |
+| Rectangular and one-cell-wide maps preserve coordinates | PASS | 4-by-2/2-by-4 comparison sets and 1-by-5/5-by-1 routes in both directions |
+| Every returned route cell and move is checked independently | PASS | Stronger shared route assertions applied to examples and comparison cases |
+| Independent checker agrees on shortest length or no route | PASS | All 512 requests across 256 maps agree |
+| Obstacle and reconstruction faults produce behavioral failures | PASS | Both required mutants detected; details below |
+| Additional meaningful planner fault is detected | PASS | Keeping first discoveries gives 19 instead of 17 steps |
+| Equivalent mutation is explained, correct code restored | PASS | Outdated-entry guard experiment documented below; all restored suites pass |
+
+### Test-first verification and exact commands
+
+The expanded tests were written before considering production changes. Their
+first run already passed: the existing planner supplied the required behavior.
+No artificial failure or implementation change was introduced to manufacture
+a red/green cycle for this verification-only chunk. The deliberate faults
+below supplied behavioral failures against the same passing tests.
+
+Normal test command from the mission worktree root, using Python 3.14.7:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
+```
+
+Initial expanded suite and final restored worktree run: exit 0; 28 methods
+passed, zero failures, zero errors, zero skips. The 512 comparison requests
+are subtests within one method, not 512 additional test methods. No
+dependency installation, Docker build, hardware, or flight was involved.
+
+### Controlled mutation checkpoint
+
+Exact executed command; the driver is outside the repository:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk4_mutation_check.py
+```
+
+The driver copies the actual production module and unchanged relevant tests
+into a temporary package and runs the full 28-method suite in a fresh Python
+subprocess for each case. `PYTHONPATH` is removed, and no sensor, flight, or
+radio module is included. The child loads the same suite with unittest's
+standard loader and runner. Unchanged baseline: all 28 passed.
+
+| Injected fault | Intended detecting test | Actual outcome |
+|---|---|---|
+| Remove obstacle membership check from `Grid.is_traversable` | `test_obstacle_requires_a_detour` | Detected by length assertion: 2 instead of 4 steps. Full suite: 461 assertion failures including subtests, zero errors/skips; exit 1. |
+| Return `route[1:]`, omitting the starting cell | `test_open_grid_returns_a_shortest_route_with_both_endpoints` | Detected by starting-endpoint assertion. Full suite: 193 assertion failures including subtests, zero errors/skips; exit 1. |
+| Replace cheaper-cost comparison with first-discovery-only membership check | `test_later_cheaper_route_replaces_an_earlier_discovery` | Detected by length assertion: 19 instead of 17 steps. Full suite: one assertion failure, zero errors/skips; exit 1. |
+| Remove obsolete-entry guard | Output-equivalent under the present route contract | Survived: all 28 passed; zero failures/errors/skips, exit 0. This repeats expansions without changing returned routes; explanation below. |
+
+The last mutation is equivalent for route results under the current static
+grid and consistent Manhattan heuristic. The lower-cost entry is expanded
+before its obsolete entry, and already considers the same neighbors at lower
+cost. The older entry cannot improve those costs. Removing the check wastes
+work without changing the route. The guard is retained for efficiency; no
+assertion about internal expansion counts was manufactured to kill it.
+
+All three non-equivalent mutants failed through intended behavioral
+assertions, not syntax/import/infrastructure errors. No relevant behavioral
+mutant survived, so no coverage repair was needed. Correct source was
+restored after every experiment, and each of the four restored temporary
+baselines passed all 28 methods. Copied tests stayed byte-for-byte unchanged;
+SHA-256 checks confirmed the workspace module and tests were never modified
+by the driver. Cleanup was restricted to the verified system temporary
+directory and confirmed complete. Driver exit: 0. No deliberate fault or
+temporary driver is part of this change.
+
+### Executed worked example
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, astar; from algorithms.test_grid_navigation import breadth_first_steps; blocked = {(2, y) for y in range(5) if y != 2}; grid = Grid(5, 5, blocked); route = astar(grid, (0, 0), (4, 0)); print('blocked:', sorted(blocked)); print('route:', route); print('A* steps:', len(route) - 1); print('independent checker steps:', breadth_first_steps(5, 5, blocked, (0, 0), (4, 0)))"
+```
+
+Actual output, exit 0:
+
+```text
+blocked: [(2, 0), (2, 1), (2, 3), (2, 4)]
+route: [(0, 0), (1, 0), (1, 1), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1), (4, 0)]
+A* steps: 8
+independent checker steps: 8
+```
+
+The route must pass through the opening at `(2, 2)`, making it longer than
+the four-step direct distance. Both algorithms report eight steps.
+
+### Limitations, Git state, and next proposal
+
+Finite-map agreement is strong regression evidence, not a proof of every
+possible input or physical navigation. The checker assumes valid endpoints
+and unit costs; it is test-only. No world-coordinate conversion, clearance,
+candidate policy, or follower exists yet. Fixed-altitude suitability and
+localization require physical validation. No physical readiness is claimed.
+
+Only the test file and this progress record changed. The production module
+has no diff. Nothing was staged, committed, or pushed for Chunk 4. Existing
+README modifications and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch
+remains `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
+There are no outgoing commits against the cached upstream. Final whitespace
+check command is `git diff --check`.
+
+Next proposed purpose: Chunk 5 will define cell size, physical origin, axis
+directions, meter units, cell-center waypoints, and explicit boundary rules.
+It will test negative world coordinates and reject out-of-map points rather
+than clamp them. These conversions will issue no drone commands. Present
+the concrete conventions for review before implementing Chunk 5. Stop here
+for review; commit and push require explicit approval.

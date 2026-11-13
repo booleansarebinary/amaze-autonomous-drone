@@ -1,9 +1,30 @@
 """Static-grid behavior tests; no sensors, radio, or flight commands."""
 
 import unittest
+from collections import deque
 
 from algorithms import grid_navigation
 from algorithms.grid_navigation import Grid
+
+
+def breadth_first_steps(width, height, blocked, start, goal):
+    """Independent shortest-length reference for valid unit-cost inputs."""
+    pending = deque([(start, 0)])
+    visited = {start}
+    while pending:
+        (x, y), steps = pending.popleft()
+        if (x, y) == goal:
+            return steps
+        # Deliberately use raw map data, not the production grid helpers.
+        for candidate in ((x, y - 1), (x - 1, y), (x, y + 1), (x + 1, y)):
+            column, row = candidate
+            if not (0 <= column < width and 0 <= row < height):
+                continue
+            if candidate in blocked or candidate in visited:
+                continue
+            visited.add(candidate)
+            pending.append((candidate, steps + 1))
+    return None
 
 
 class GridTests(unittest.TestCase):
@@ -116,7 +137,13 @@ class AstarTests(unittest.TestCase):
         self.assertEqual(route[-1], goal)
         self.assertEqual(len(route) - 1, steps)
         for cell in route:
-            self.assertTrue(grid.is_traversable(cell), cell)
+            self.assertIsInstance(cell, tuple)
+            self.assertEqual(len(cell), 2)
+            x, y = cell
+            self.assertIs(type(x), int)
+            self.assertIs(type(y), int)
+            self.assertTrue(0 <= x < grid.width and 0 <= y < grid.height, cell)
+            self.assertNotIn(cell, grid.blocked)
         for previous, current in zip(route, route[1:]):
             self.assertEqual(
                 abs(previous[0] - current[0]) + abs(previous[1] - current[1]), 1
@@ -166,6 +193,84 @@ class AstarTests(unittest.TestCase):
             with self.subTest(start=start, goal=goal):
                 with self.assertRaises(ValueError):
                     grid_navigation.astar(grid, start, goal)
+
+    def test_breadth_first_reference_matches_hand_counted_cases(self):
+        cases = [
+            (4, 3, set(), (0, 0), (3, 2), 5),
+            (3, 2, {(1, 0)}, (0, 0), (2, 0), 4),
+            (3, 2, {(1, 0), (1, 1)}, (0, 0), (2, 0), None),
+            (1, 1, set(), (0, 0), (0, 0), 0),
+        ]
+        for width, height, blocked, start, goal, expected in cases:
+            with self.subTest(width=width, height=height, blocked=blocked):
+                self.assertEqual(
+                    breadth_first_steps(width, height, blocked, start, goal), expected
+                )
+
+    def test_narrow_passage_requires_a_longer_route(self):
+        blocked = {(2, y) for y in range(5) if y != 2}
+        grid = Grid(5, 5, blocked)
+        route = grid_navigation.astar(grid, (0, 0), (4, 0))
+        self.assert_valid_route(grid, route, (0, 0), (4, 0), steps=8)
+        self.assertIn((2, 2), route)
+
+    def test_one_cell_wide_rectangles_work_in_both_directions(self):
+        for width, height in [(1, 5), (5, 1)]:
+            grid = Grid(width, height)
+            far_corner = (width - 1, height - 1)
+            for start, goal in [((0, 0), far_corner), (far_corner, (0, 0))]:
+                with self.subTest(width=width, height=height, start=start):
+                    route = grid_navigation.astar(grid, start, goal)
+                    self.assert_valid_route(grid, route, start, goal, steps=4)
+
+    def test_enclosed_start_or_goal_returns_none(self):
+        grid = Grid(3, 3, blocked={(1, 0), (0, 1)})
+        for start, goal in [((0, 0), (2, 2)), ((2, 2), (0, 0))]:
+            with self.subTest(start=start, goal=goal):
+                self.assertIsNone(grid_navigation.astar(grid, start, goal))
+
+    def test_start_equals_goal_still_requires_a_valid_cell(self):
+        grid = Grid(2, 2, blocked={(1, 1)})
+        for cell in [(1, 1), (-1, 0), (0, 2)]:
+            with self.subTest(cell=cell):
+                with self.assertRaises(ValueError):
+                    grid_navigation.astar(grid, cell, cell)
+        self.assertEqual(grid_navigation.astar(Grid(1, 1), (0, 0), (0, 0)), [(0, 0)])
+
+    def test_each_endpoint_rejects_all_map_boundaries_and_malformed_cells(self):
+        grid = Grid(4, 2)
+        invalid_cells = [
+            (-1, 0), (4, 0), (0, -1), (0, 2), (1.0, 0), (True, 0),
+            (float("nan"), 0), (0, float("inf")), (0,), (0, 0, 0),
+            [0, 0], "00", None,
+        ]
+        for invalid in invalid_cells:
+            for start, goal in [(invalid, (0, 0)), ((0, 0), invalid)]:
+                with self.subTest(start=start, goal=goal):
+                    with self.assertRaises(ValueError):
+                        grid_navigation.astar(grid, start, goal)
+
+    def test_all_small_obstacle_layouts_match_independent_breadth_first_search(self):
+        for width, height in [(3, 3), (4, 2), (2, 4)]:
+            first, last = (0, 0), (width - 1, height - 1)
+            optional_obstacles = [
+                (x, y) for x in range(width) for y in range(height)
+                if (x, y) not in (first, last)
+            ]
+            for mask in range(1 << len(optional_obstacles)):
+                blocked = {
+                    cell for index, cell in enumerate(optional_obstacles)
+                    if mask & (1 << index)
+                }
+                grid = Grid(width, height, blocked)
+                for start, goal in [(first, last), (last, first)]:
+                    with self.subTest(width=width, height=height, mask=mask, start=start):
+                        expected = breadth_first_steps(width, height, blocked, start, goal)
+                        route = grid_navigation.astar(grid, start, goal)
+                        if expected is None:
+                            self.assertIsNone(route)
+                        else:
+                            self.assert_valid_route(grid, route, start, goal, expected)
 
 
 if __name__ == "__main__":
