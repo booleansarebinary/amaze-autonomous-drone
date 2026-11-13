@@ -1030,3 +1030,163 @@ It will preserve text-only operation without a plotting dependency, distinguish
 planned routes from measured data, and handle no-route examples. Planned-route
 JSON export follows separately. Review plotting scope and dependency handling
 before implementation. Stop here for review; commit/push need explicit approval.
+
+Subsequent Git outcome: after approval, Chunk 7A was committed with its
+plain-language body as `b3f2fe9` (`Add a text demo for planning grid routes`)
+and pushed alone to `origin/MAIN_collect_the_astrophage`. The preceding
+status records the original Chunk 7A review.
+
+## Chunk 7B: optional saved route picture — PASS
+
+### Purpose, reuse, and changes
+
+The optional plotting purpose was reviewed and authorized before starting.
+This adds `--plot NEW_FILE.png` without changing the planner, input maps,
+route costs, text-only dependencies, or no-route exit status.
+
+- `algorithms/grid_plot.py`: `route_figure` builds the picture;
+  `save_route_plot` saves it to a new PNG file and clears figure data.
+- `algorithms/grid_demo.py`: adds the optional argument, passes original and
+  planning grids to the plotter, reports the filename, and handles plot errors.
+- `algorithms/test_grid_plot.py`: four real-backend content/file tests.
+- `algorithms/test_grid_demo.py`: three more tests covering dependency-free
+  text, a missing plotting dependency, and actual subprocess PNG generation.
+- `algorithms/requirements-grid-plot.txt`: optional Matplotlib requirement,
+  following the existing `matplotlib>=3.8,<4` demo convention inspected in
+  the test-flight object-orbit worktree. Core project dependencies and lock
+  file are unchanged.
+- Demo guide and this record document usage and executed evidence.
+
+Before choosing the implementation, Ansur's existing `plot_runs` on cached
+`origin/MAIN_eridian_trench_run` was inspected again. Its lazy imports,
+rectangle obstacles, equal-scale axes, and noninteractive Agg output are
+adapted here. Its simulator world/telemetry inputs and coupled NumPy/controller
+module are inappropriate dependencies for the pure static-grid CLI. Direct
+Figure/Agg objects avoid opening windows or changing pyplot's global backend.
+No simulator or flight adapter is imported.
+
+The picture distinguishes original obstacle squares from additional clearance
+exclusions, draws the existing planned route in grid-cell coordinates, and
+marks both endpoints. Integer axis coordinates are cell centers; cells span
+half a coordinate unit on either side. Axis units are cells, not meters.
+Both axes use the same scale and y increases upward. Titles explicitly label
+offline planning; unreachable cases show `No route` and omit a route line.
+PNG output is optional and requires a new filename. The input map and existing
+files are protected; a GUI window is never opened automatically.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Preserve text-only use without Matplotlib | PASS | Original environment has no Matplotlib; text and dependency-message tests pass |
+| Save an optional real image through the CLI | PASS | Real subprocess PNGs verified with Pillow |
+| Preserve obstacle area, route coordinates, axes, and offline label | PASS | Figure-content assertions and visual inspection |
+| Distinguish original obstacles from clearance exclusions | PASS | Separate legend/color assertions and inspected clearance picture |
+| Show unreachable cases without implying a completed route | PASS | No-route title/endpoints, no route line, PNG saved with exit 1 |
+| Preserve existing files and report missing dependency clearly | PASS | Exclusive-file test and simulated dependency absence |
+| Reuse existing plotting conventions without hardware dependencies | PASS | Existing-helper inspection and direct Agg adaptation above |
+
+### Environment and test-first evidence
+
+The existing test-flight interpreter initially reported Matplotlib and Pillow
+absent. A separate temporary Python 3.14.7 environment was created at
+`C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b`:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m venv C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m pip install --disable-pip-version-check --only-binary=:all: -r algorithms/requirements-grid-plot.txt
+```
+
+The first package download failed because sandbox networking was denied.
+The same install command succeeded with approved network access, installing
+Matplotlib 3.11.2, Pillow 13.0.0, and their dependencies in the temporary
+environment only. The shared flight environment was not modified. A temporary
+Matplotlib cache path keeps generated cache files outside the repository.
+
+Tests were written before implementation, with empty figure/save skeletons
+and no CLI plot option. Exact red command:
+
+```powershell
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_demo algorithms.test_grid_plot -q
+```
+
+Red result: exit 1; 16 methods, seven assertion failures including subtests,
+zero errors/skips. The assertions detected missing figures, missing file
+protection, and unimplemented CLI plot behavior rather than absent imports.
+
+Exact passing full-suite commands:
+
+```powershell
+$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot -q
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot -q
+```
+
+- With Matplotlib: exit 0, 64 passed, zero failures/errors/skips.
+- Original environment without Matplotlib: exit 0, 59 passed and five optional
+  image tests skipped, zero failures/errors. The text-mode and missing-library
+  message tests still execute.
+
+The real-backend tests check obstacle rectangle area, route coordinate data,
+ascending axes, explicit title/units, distinct clearance styling, no-route
+endpoints, preserved existing file bytes, and decodable PNG output from the
+actual CLI subprocess. These test visible plot behavior rather than only
+mocking plotting calls. No hardware, radio, or flight test was run.
+
+Mutation checks: NOT DUE for this visualization subchunk. No deliberate fault
+or mutation artifact was introduced. The prior clearance checkpoint remains
+recorded in Chunk 6.
+
+### Actual images and worked example
+
+Open, detour, and unreachable CLI images were generated and visually inspected
+under `C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b` using:
+
+```powershell
+$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\open.png
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\detour.png
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\unreachable.png
+```
+
+Actual exits/results: open 0 with five steps; detour 0 with four steps;
+unreachable 1 with no route. Each command saved its PNG and retained the
+existing text output. The detour picture shows obstacle `(1, 0)` as a full
+square and route `[(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]` around it.
+
+A fourth clearance picture was also generated and visually inspected using
+this exact command:
+
+```powershell
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles; from algorithms.grid_plot import save_route_plot; grid = Grid(9, 7, {(4, 3)}); planning = inflate_obstacles(GridCoordinates(grid, 0.25), 0.1, 0.05); route = astar(planning, (1, 3), (7, 3)); save_route_plot(r'C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\clearance.png', grid, planning, (1, 3), (7, 3), route); print('clearance route:', route); print('steps:', len(route) - 1)"
+```
+
+Actual exit 0, ten steps; route:
+`[(1, 3), (2, 3), (2, 4), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5), (7, 4), (7, 3)]`.
+The picture visibly separates the red original obstacle from orange added
+exclusions around it and the arena edges. These are test dimensions, not
+measured physical values. All four generated PNGs remain outside Git.
+
+### Limitations, Git state, and next proposal
+
+Plotting adds an optional Matplotlib dependency; the requirement range follows
+the existing demo convention, while the exact tested version is recorded above.
+No screenshot comparison or physical motion inference is claimed. Axes remain
+grid-cell coordinates. Planned-route JSON export is still pending.
+Fixed-altitude suitability, localization/frame alignment, physical dimensions,
+tracking, and the connection from measured pose to the first waypoint remain
+unvalidated. Pictures do not establish physical flight readiness.
+
+Chunk 7A was committed/pushed first. Chunk 7B's plot module, requirements file,
+tests, CLI integration, and documentation changes remain unstaged/uncommitted;
+no Chunk 7B commit or push was made. Existing README changes and deletions of
+`docs/architecture.md`, `docs/decisions.md`, and `docs/pr_walkthrough.md` remain
+untouched. Branch remains `astrophage-collection`, tracking
+`origin/MAIN_collect_the_astrophage`, with no outgoing commits against the
+cached upstream. Whitespace checks cover both tracked and new files. No
+generated images, caches, temporary environments, prompts, or logs are staged.
+
+Next proposed purpose: Chunk 7C will export the planned route and relevant
+supplied configuration as valid JSON, explicitly identified as planned data.
+Review the schema, unreachable representation, and output-file behavior before
+implementation. Stop here for review; commit/push need explicit approval.

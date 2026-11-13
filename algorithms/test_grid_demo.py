@@ -2,12 +2,14 @@
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from algorithms.grid_demo import main
 
@@ -126,6 +128,60 @@ class GridDemoTests(unittest.TestCase):
             self.assertEqual(result.exception.code, 2)
             self.assertIn("error:", errors.getvalue())
             self.assertNotIn("Traceback", errors.getvalue())
+
+    def test_text_mode_does_not_import_matplotlib(self):
+        original_import = __import__
+
+        def without_matplotlib(name, *args, **kwargs):
+            if name == "matplotlib" or name.startswith("matplotlib."):
+                raise ImportError("optional plotting library unavailable")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=without_matplotlib):
+            code, output, errors = self.run_demo({"width": 3, "height": 2})
+        self.assertEqual(code, 0)
+        self.assertIn("Steps: 2", output)
+        self.assertEqual(errors, "")
+
+    def test_requested_plot_reports_missing_optional_dependency(self):
+        original_import = __import__
+
+        def without_matplotlib(name, *args, **kwargs):
+            if name == "matplotlib" or name.startswith("matplotlib."):
+                raise ImportError("optional plotting library unavailable")
+            return original_import(name, *args, **kwargs)
+
+        with TemporaryDirectory(prefix="astrophage-plot-missing-") as directory:
+            destination = Path(directory) / "plot.png"
+            with patch("builtins.__import__", side_effect=without_matplotlib):
+                code, output, errors = self.run_demo(
+                    {"width": 3, "height": 2}, extra=["--plot", str(destination)]
+                )
+            self.assertEqual(code, 2)
+            self.assertEqual(output, "")
+            self.assertIn("requirements-grid-plot.txt", errors)
+            self.assertFalse(destination.exists())
+
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed")
+    def test_plot_option_saves_real_pngs_without_changing_route_exit_codes(self):
+        from PIL import Image
+
+        with TemporaryDirectory(prefix="astrophage-plot-cli-") as directory:
+            for blocked, expected_code in [([[1, 0]], 0), ([[1, 0], [1, 1]], 1)]:
+                with self.subTest(blocked=blocked):
+                    destination = Path(directory) / f"route-{expected_code}.png"
+                    code, output, errors = self.run_demo(
+                        {"width": 3, "height": 2, "blocked": blocked},
+                        extra=["--plot", str(destination)], process=True,
+                    )
+                    self.assertEqual(code, expected_code)
+                    self.assertEqual(errors, "")
+                    self.assertIn("Plot saved:", output)
+                    with Image.open(destination) as picture:
+                        self.assertEqual(picture.format, "PNG")
+                        self.assertGreater(picture.width, 100)
+                        self.assertGreater(picture.height, 100)
+                        picture.verify()
 
 
 if __name__ == "__main__":

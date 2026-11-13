@@ -1,6 +1,6 @@
 # Offline navigation demo
 
-Run from the repository root with Python 3.10 or later. This text-only demo
+Run from the repository root with Python 3.10 or later. The basic text demo
 uses the standard library and the existing grid planner; it requires no
 sensor, drone, radio, dashboard, or dependency installation.
 
@@ -43,8 +43,9 @@ Steps: 4
 Cells: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
 ```
 
-Output is labeled `Planned route (offline)`. It is text, not a measurement
-log or a route-export file. A later subchunk will add planned-route JSON
+Output is labeled `Planned route (offline)`. Default output is text, with
+optional PNG pictures described below. It is not a measurement log or a
+route-export file. A later subchunk will add planned-route JSON
 export. The three examples produce five steps, four steps, and no route,
 respectively.
 
@@ -65,6 +66,39 @@ The original JSON file is not changed. A start or goal excluded by clearance
 is invalid and must be supplied again at a usable location; it is not moved
 automatically. See the [progress record](astrophage-navigation-progress.md)
 for geometry and validation evidence.
+
+## Optional saved picture
+
+Install the optional plotting packages into your chosen development
+environment only if you want a picture:
+
+```sh
+python -m pip install -r algorithms/requirements-grid-plot.txt
+```
+
+Then add `--plot` with a new `.png` destination. For example, in PowerShell:
+
+```powershell
+$plotPath = Join-Path ([IO.Path]::GetTempPath()) 'astrophage-detour.png'
+python -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --plot "$plotPath"
+```
+
+The parent directory must exist. Existing files and the input map are never
+overwritten; choose a different filename for another run. Keep generated
+pictures outside commits. No window opens automatically.
+
+The picture shows original obstacle cells in red, extra clearance exclusions
+in orange, a blue planned route, a green start triangle, and a purple goal
+star. Axes show grid-cell indices, not meters; integer coordinates mark cell
+centers. Both axes use the same scale, with positive y upward. The title says
+`Planned route (offline)`. If no route exists, a picture can still be saved:
+it shows both endpoints with a `No route` title and no route line, and the
+command still exits with code 1.
+
+Text-only operation does not import Matplotlib. Requesting a picture without
+the optional packages produces an installation message and exit code 2.
+Image output errors also use exit code 2. Planned-route JSON export remains
+a separate later subchunk.
 
 ## Exit codes and limitations
 

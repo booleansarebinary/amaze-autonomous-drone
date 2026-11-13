@@ -58,12 +58,14 @@ def main(argv=None) -> int:
     parser.add_argument("--cell-size-m", type=float, help="square cell size in meters")
     parser.add_argument("--footprint-radius-m", type=float, help="provisional enclosing radius")
     parser.add_argument("--margin-m", type=float, help="provisional extra clearance")
+    parser.add_argument("--plot", type=Path, help="save an optional PNG to a new file")
     args = parser.parse_args(argv)
     start, goal = tuple(args.start), tuple(args.goal)
     clearance_values = (args.cell_size_m, args.footprint_radius_m, args.margin_m)
     clearance_enabled = any(value is not None for value in clearance_values)
     try:
         grid = load_grid(args.map)
+        original_grid = grid
         if clearance_enabled:
             if any(value is None for value in clearance_values):
                 raise ValueError("cell size, footprint radius, and margin must be supplied together")
@@ -71,7 +73,12 @@ def main(argv=None) -> int:
                 GridCoordinates(grid, args.cell_size_m), args.footprint_radius_m, args.margin_m
             )
         route = astar(grid, start, goal)
-    except (OSError, ValueError) as exc:
+        if args.plot is not None:
+            if args.plot.resolve() == args.map.resolve():
+                raise ValueError("plot output must differ from the input map")
+            from algorithms.grid_plot import save_route_plot
+            save_route_plot(args.plot, original_grid, grid, start, goal, route)
+    except (OSError, ValueError, RuntimeError) as exc:
         parser.error(str(exc))
 
     print("Planned route (offline)")
@@ -82,6 +89,8 @@ def main(argv=None) -> int:
         print("Clearance: not applied (point grid).")
     print("S=start, G=goal, B=start and goal, *=route, #=blocked, .=free")
     print(render_grid(grid, start, goal, route))
+    if args.plot is not None:
+        print(f"Plot saved: {args.plot}")
     if route is None:
         print("No planned route exists between the supplied cells.")
         return 1
