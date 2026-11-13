@@ -691,3 +691,192 @@ arena boundaries. A route through a narrow gap may become unavailable while
 a wider route remains. Present the footprint, margin, and collision rules
 for review before implementing that chunk. Stop here for Chunk 5 review;
 committing and pushing this change require separate explicit approval.
+
+Subsequent Git outcome: after approval, Chunk 5 was committed with the simpler
+body as `b6646f1` (`Convert grid cells to map coordinates in meters`) and
+pushed alone to `origin/MAIN_collect_the_astrophage`. The preceding status
+records the original Chunk 5 review.
+
+## Chunk 6: clearance-aware planning — PASS
+
+### Purpose and files
+
+The footprint-plus-margin purpose was reviewed and implementation authorized
+along with the Chunk 5 commit/push. This chunk prepares a new blocked-cell map
+that the existing A* function can use without changes to search.
+
+- `algorithms/grid_navigation.py`: adds `inflate_obstacles(coordinates,
+  footprint_radius_m, margin_m)`, reusing `GridCoordinates` and `Grid`.
+- `algorithms/test_grid_navigation.py`: adds ten clearance tests.
+- This record documents geometry, provisional inputs, test results, and faults.
+
+Both radius and margin must be supplied explicitly as finite nonnegative
+meters. Their sum must be finite. There is no assumed hardware dimension or
+default physical margin. The radius must conservatively enclose the drone's
+horizontal footprint; the margin must account for measured positioning,
+tracking, map, and other relevant uncertainties before physical use. All
+numerical examples here are test configurations, not validated flight values.
+
+### Geometry and behavior
+
+Required clearance is footprint radius plus margin. A candidate cell is kept
+only if its entire square is farther than that clearance from all original
+obstacle squares and arena walls. Contact at the requested clearance is
+rejected. This is conservative over the whole cell, rather than just its
+center or the center of an obstacle. It also covers the cardinal segments
+between retained cell-center waypoints under the assumed static 2D geometry.
+It does not cover actual vehicle tracking or the connection from measured
+starting pose to the route.
+
+For an obstacle at index `(obstacle_x, obstacle_y)`, square-to-square gaps are:
+
+```text
+gap_x_m = max(abs(x - obstacle_x) - 1, 0) * cell_size_m
+gap_y_m = max(abs(y - obstacle_y) - 1, 0) * cell_size_m
+distance_m = hypot(gap_x_m, gap_y_m)
+```
+
+`hypot` computes the straight-line distance from these perpendicular gaps,
+including diagonal corner separation. Adjacent squares touch and have zero
+gap. Wall clearance uses the minimum distance from the full candidate square
+to the four arena edges. Map translation does not change these distances;
+cell size does. Only original obstacles are used when classifying cells,
+so new exclusions do not recursively inflate each other. The original map
+is unchanged, and the returned `Grid` is directly usable by `astar`.
+
+A tiny conservative numerical allowance is added for comparison:
+`max(1e-12 meters, clearance_m * 1e-12)`. This rejects near-contact when
+decimal floating-point rounding would otherwise incorrectly allow it.
+It is separate from the physical margin. Zero radius and zero margin
+explicitly disable the operation and return the original grid.
+
+Whole-cell exclusion can reject routes that a finer or less conservative
+planner could use. Any positive clearance excludes outermost arena cells
+and obstacle-adjacent cells, even where a cell center alone might fit.
+Callers must check the supplied start and goal on the resulting grid;
+existing A* raises `ValueError` if either becomes blocked and returns `None`
+if valid endpoints have become disconnected.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Explicit provisional footprint radius and configurable margin | PASS | Required parameters, finite/nonnegative validation, documented physical limitations |
+| Account for full obstacle/candidate squares and diagonal corners | PASS | Adjacent square and Euclidean corner-distance tests |
+| Include arena boundaries and reject exact contact | PASS | All four walls, exact threshold, and decimal-rounding tests |
+| Narrow corridor becomes unavailable | PASS | Original eight-step route becomes `None` with both endpoints still free |
+| Wider corridor remains usable | PASS | Eight-step route survives through its middle row |
+| Preserve meter scaling and translation behavior | PASS | 0.25/0.5 m cell sizes differ correctly; shifted origin gives identical exclusions |
+| Radius and margin both affect exclusions | PASS | Increasing only margin blocks a previously usable cell |
+| Preserve input map and explicit zero-clearance mode | PASS | Original obstacle set unchanged; zero total clearance returns unchanged map |
+| Clearance-removal and unit defects detected | PASS | Both required mutations fail behavioral assertions |
+| Restore correct code and rerun normal suite | PASS | Four restored temporary suites and final worktree suite pass |
+
+### Test-first sequence and actual results
+
+Exact first test command from the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.ClearanceTests -q
+```
+
+Nine tests were written before implementation. An empty skeleton returning
+the input grid let them exercise the missing behavior. Red result: exit 1,
+nine methods run, 22 assertion failures including subtests, zero errors,
+zero skips. After implementation, the then-current 47-method suite passed.
+
+Review identified a decimal-contact issue: `3 * 0.1` compares slightly
+greater than `0.3`. A tenth test reproduced incorrect acceptance at an
+obstacle and at a wall, using this exact command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.ClearanceTests.test_decimal_clearance_contact_is_not_lost_to_rounding -q
+```
+
+Red result: exit 1, one method, two behavioral assertion failures, zero
+errors/skips. Adding the conservative rounding allowance resolved the fault.
+
+Exact final full-suite command, also run after all mutations:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -q
+```
+
+Result: exit 0; 48 methods passed, zero failures, zero errors, zero skips,
+including the existing 512 independent route-length comparisons. Interpreter
+is Python 3.14.7. No dependency installation, hardware, radio, or flight run.
+
+### Controlled mutation checkpoint
+
+Exact command; the driver remains outside the repository:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk6_mutation_check.py
+```
+
+The final checkpoint uses the actual implementation and unchanged final tests
+in a temporary isolated package. Each fault runs alone in a fresh Python
+subprocess, with `PYTHONPATH` removed, using unittest's standard suite loader
+and runner. Baseline: all 48 pass. No hardware adapter is included.
+
+| Fault | Intended detecting test | Final actual result |
+|---|---|---|
+| Return original map for every nonnegative clearance | `test_narrow_corridor_becomes_unreachable_with_clearance` | Eight-step corridor incorrectly remains available. 13 assertion failures including subtests, zero errors/skips; exit 1. |
+| Replace configured cell size with 1.0 m | `test_cell_size_changes_physical_clearance_and_origin_does_not` | Cell `(6, 3)` incorrectly remains free with the smaller cells. Six assertion failures, zero errors/skips; exit 1. |
+| Disable arena-wall clearance check | `test_arena_boundaries_reserve_the_whole_cell_and_reject_contact` | Arena-edge cell `(0, 2)` incorrectly remains free. Seven assertion failures including subtests, zero errors/skips; exit 1. |
+| Omit margin from total clearance | `test_footprint_and_margin_add_in_meters` | Cell `(6, 3)` incorrectly remains free when margin should exclude it. Two assertion failures, zero errors/skips; exit 1. |
+
+All faults were caught by intended behavioral assertions. No mutant survived;
+syntax/import/infrastructure failures were not used as detection evidence.
+The initial 47-test implementation also detected the four faults; after the
+decimal fix, the complete checkpoint was rerun against the final 48 tests.
+Each restored temporary baseline passed all 48 methods. Copied tests stayed
+byte-for-byte unchanged; SHA-256 checks confirmed that workspace source and
+tests were never altered by mutation runs. Temporary copies were removed
+after checking their resolved location inside the intended temporary root.
+Driver exit: 0; cleanup confirmed. No mutation artifact is part of the change.
+
+### Executed worked example
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles; narrow = Grid(11, 7, {(x, y) for x in range(3, 8) for y in (2, 4)}); wide = Grid(11, 9, {(x, y) for x in range(3, 8) for y in (2, 6)}); narrow_clear = inflate_obstacles(GridCoordinates(narrow, 0.25), 0.1, 0.05); wide_clear = inflate_obstacles(GridCoordinates(wide, 0.25), 0.1, 0.05); print('narrow before clearance steps:', len(astar(narrow, (1, 3), (9, 3))) - 1); print('narrow after clearance route:', astar(narrow_clear, (1, 3), (9, 3))); route = astar(wide_clear, (1, 4), (9, 4)); print('wide after clearance route:', route); print('wide after clearance steps:', len(route) - 1)"
+```
+
+Actual output, exit 0:
+
+```text
+narrow before clearance steps: 8
+narrow after clearance route: None
+wide after clearance route: [(1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (8, 4), (9, 4)]
+wide after clearance steps: 8
+```
+
+Both examples use 0.25 m cells, a test footprint radius of 0.10 m, and a
+test margin of 0.05 m. The narrow opening is one cell (0.25 m) wide;
+the wider opening is three cells (0.75 m) wide. These are planned routes
+under supplied geometry, not measured vehicle motion or validated dimensions.
+
+### Limitations, Git state, and next proposal
+
+The simple implementation checks every cell against original obstacles:
+time scales with width times height times obstacle count. It is intended
+for small supplied maps; no new optimization framework is introduced.
+The circle, margin, static obstacle map, fixed altitude, localization, and
+tracking assumptions must be validated before physical use. Inflation does
+not validate actual starting-pose connections, braking, moving obstacles,
+or flight readiness. Fine passages may be rejected conservatively.
+
+Chunk 5 was committed and pushed before this work. Chunk 6 changes only the
+navigation module, its tests, and this progress record. They remain unstaged
+and uncommitted; no Chunk 6 commit or push was made. Existing README changes
+and deletions of `docs/architecture.md`, `docs/decisions.md`, and
+`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
+tracking `origin/MAIN_collect_the_astrophage`; no outgoing commits exist
+against the cached upstream. Whitespace check: `git diff --check`.
+
+Next proposed purpose: split Chunk 7 into a text command-line demonstration,
+visualization, and planned-route JSON export if needed to keep each change
+small. Review the first subchunk's supplied map/start/goal input and text
+output before implementation. It will use the existing planner without a
+dashboard, sensor, or radio dependency. Stop here for Chunk 6 review;
+commit and push require separate explicit approval.

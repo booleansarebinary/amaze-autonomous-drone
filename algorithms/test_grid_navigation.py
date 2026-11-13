@@ -374,5 +374,97 @@ class GridCoordinatesTests(unittest.TestCase):
                     self.coordinates(size=size, origin=origin)
 
 
+class ClearanceTests(unittest.TestCase):
+    def inflate(self, grid, radius=0.1, margin=0.05, size=0.25, origin=(0.0, 0.0)):
+        coordinates = grid_navigation.GridCoordinates(grid, size, origin)
+        return grid_navigation.inflate_obstacles(coordinates, radius, margin)
+
+    def test_narrow_corridor_becomes_unreachable_with_clearance(self):
+        walls = {(x, y) for x in range(3, 8) for y in (2, 4)}
+        original = Grid(11, 7, walls)
+        start, goal = (1, 3), (9, 3)
+        self.assertEqual(len(grid_navigation.astar(original, start, goal)) - 1, 8)
+        inflated = self.inflate(original)
+        self.assertTrue(inflated.is_traversable(start))
+        self.assertTrue(inflated.is_traversable(goal))
+        self.assertIsNone(grid_navigation.astar(inflated, start, goal))
+
+    def test_wider_corridor_still_has_a_valid_route(self):
+        walls = {(x, y) for x in range(3, 8) for y in (2, 6)}
+        inflated = self.inflate(Grid(11, 9, walls))
+        route = grid_navigation.astar(inflated, (1, 4), (9, 4))
+        self.assertIsNotNone(route)
+        self.assertEqual(len(route) - 1, 8)
+        for cell in route:
+            self.assertNotIn(cell, inflated.blocked)
+        self.assertIn((5, 4), route)
+
+    def test_entire_cells_and_obstacle_corners_count_as_occupied_geometry(self):
+        grid = Grid(9, 9, blocked={(3, 3)})
+        inflated = self.inflate(grid, radius=0.1, margin=0, size=0.5)
+        self.assertIn((3, 3), inflated.blocked)
+        self.assertIn((4, 3), inflated.blocked)
+        self.assertIn((4, 4), inflated.blocked)
+        self.assertNotIn((5, 4), inflated.blocked)
+
+    def test_square_to_square_distance_and_exact_clearance_contact(self):
+        grid = Grid(9, 9, blocked={(3, 3)})
+        self.assertNotIn((5, 4), self.inflate(grid, 0.49, 0, 0.5).blocked)
+        self.assertIn((5, 4), self.inflate(grid, 0.5, 0, 0.5).blocked)
+        # Corner gap is sqrt(0.5**2 + 0.5**2), between 0.6 and 0.71 m.
+        self.assertNotIn((5, 5), self.inflate(grid, 0.6, 0, 0.5).blocked)
+        self.assertIn((5, 5), self.inflate(grid, 0.71, 0, 0.5).blocked)
+
+    def test_arena_boundaries_reserve_the_whole_cell_and_reject_contact(self):
+        grid = Grid(7, 5)
+        inflated = self.inflate(grid, radius=0.24, margin=0)
+        for cell in [(0, 2), (6, 2), (3, 0), (3, 4)]:
+            with self.subTest(cell=cell):
+                self.assertIn(cell, inflated.blocked)
+        self.assertNotIn((1, 2), inflated.blocked)
+        self.assertIn((1, 2), self.inflate(grid, radius=0.25, margin=0).blocked)
+
+    def test_footprint_and_margin_add_in_meters(self):
+        grid = Grid(11, 9, blocked={(4, 3)})
+        self.assertNotIn((6, 3), self.inflate(grid, radius=0.1, margin=0.1).blocked)
+        self.assertIn((6, 3), self.inflate(grid, radius=0.1, margin=0.15).blocked)
+
+    def test_decimal_clearance_contact_is_not_lost_to_rounding(self):
+        # 3 * 0.1 rounds slightly above 0.3; contact must remain blocked.
+        for grid, cell in [
+            (Grid(15, 11, blocked={(3, 5)}), (7, 5)),
+            (Grid(15, 11), (3, 5)),
+        ]:
+            with self.subTest(blocked=grid.blocked, cell=cell):
+                self.assertIn(cell, self.inflate(grid, radius=0.3, margin=0, size=0.1).blocked)
+
+    def test_cell_size_changes_physical_clearance_and_origin_does_not(self):
+        grid = Grid(11, 9, blocked={(4, 3)})
+        small_cells = self.inflate(grid, radius=0.3, margin=0, size=0.25)
+        large_cells = self.inflate(grid, radius=0.3, margin=0, size=0.5)
+        self.assertIn((6, 3), small_cells.blocked)
+        self.assertNotIn((6, 3), large_cells.blocked)
+        translated = self.inflate(grid, radius=0.3, margin=0, size=0.25, origin=(-2, 3))
+        self.assertEqual(translated, small_cells)
+
+    def test_inflation_preserves_original_map_and_zero_disables_clearance(self):
+        original = Grid(7, 5, blocked={(3, 2)})
+        inflated = self.inflate(original)
+        self.assertEqual(original.blocked, frozenset({(3, 2)}))
+        self.assertEqual((inflated.width, inflated.height), (7, 5))
+        self.assertTrue(original.blocked < inflated.blocked)
+        self.assertEqual(self.inflate(original, radius=0, margin=0), original)
+
+    def test_invalid_footprint_or_margin_is_rejected(self):
+        coordinates = grid_navigation.GridCoordinates(Grid(3, 3), 0.25)
+        for invalid in [-0.1, True, "0.1", math.inf, math.nan]:
+            for radius, margin in [(invalid, 0.1), (0.1, invalid)]:
+                with self.subTest(radius=radius, margin=margin):
+                    with self.assertRaises(ValueError):
+                        grid_navigation.inflate_obstacles(coordinates, radius, margin)
+        with self.assertRaises(ValueError):
+            grid_navigation.inflate_obstacles(coordinates, 1e308, 1e308)
+
+
 if __name__ == "__main__":
     unittest.main()

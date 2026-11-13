@@ -196,3 +196,49 @@ class GridCoordinates:
                     lower = middle
             indices.append(lower)
         return (indices[0], indices[1])
+
+
+def inflate_obstacles(
+    coordinates: GridCoordinates, footprint_radius_m: float, margin_m: float
+) -> Grid:
+    """Reserve whole-cell clearance for a circular footprint plus margin.
+
+    Radius must conservatively enclose the vehicle; both inputs are provisional
+    until dimensions and localization/tracking error are measured. Any contact
+    at the requested clearance is rejected. Zero total clearance disables this
+    operation. The source grid is never modified.
+    """
+    for value in (footprint_radius_m, margin_m):
+        if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+            raise ValueError("footprint radius and margin must be finite nonnegative meters")
+    clearance_m = footprint_radius_m + margin_m
+    if not math.isfinite(clearance_m):
+        raise ValueError("combined clearance must be finite")
+    grid = coordinates.grid
+    if clearance_m == 0:
+        return grid
+
+    # Conservatively include near-contact despite decimal floating-point error.
+    # This numerical guard is not a substitute for the physical margin.
+    rounding_guard_m = max(1e-12, clearance_m * 1e-12)
+    clearance_limit_m = clearance_m + rounding_guard_m
+    cell_size_m = coordinates.cell_size_m
+    blocked = set(grid.blocked)
+    for x in range(grid.width):
+        for y in range(grid.height):
+            if (x, y) in grid.blocked:
+                continue
+            # Minimum distance from the entire candidate square to arena walls.
+            wall_gap_m = min(x, y, grid.width - x - 1, grid.height - y - 1) * cell_size_m
+            if wall_gap_m <= clearance_limit_m:
+                blocked.add((x, y))
+                continue
+            for obstacle_x, obstacle_y in grid.blocked:
+                # Adjacent squares touch. Subtract a full cell width to measure
+                # square-to-square gaps rather than center-to-center distances.
+                gap_x_m = max(abs(x - obstacle_x) - 1, 0) * cell_size_m
+                gap_y_m = max(abs(y - obstacle_y) - 1, 0) * cell_size_m
+                if math.hypot(gap_x_m, gap_y_m) <= clearance_limit_m:
+                    blocked.add((x, y))
+                    break
+    return Grid(grid.width, grid.height, blocked)
