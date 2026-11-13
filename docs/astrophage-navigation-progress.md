@@ -244,3 +244,153 @@ model would require reassessing this heuristic.
 Next proposed chunk: smallest complete A* search, adapting the existing
 search structure identified in Chunk 0. Stop here for review; commit and
 push of Chunk 2 require separate explicit approval.
+
+Subsequent Git outcome: after approval of a plain-language commit body,
+Chunk 2 was committed as `594bf3f` (`Add Manhattan distance for cardinal
+grid navigation`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
+The Git state above records the original Chunk 2 review.
+
+## Chunk 3: smallest complete A* search — PASS
+
+### Purpose and changes
+
+The purpose and acceptance criteria were presented for review before work
+began, and implementation was authorized. This chunk connects the existing
+grid and distance estimate into a shortest-route search.
+
+- `algorithms/grid_navigation.py`: adds `astar(grid, start, goal)` and
+  standard-library `heapq` and `itertools.count` imports. No dependencies added.
+- `algorithms/test_grid_navigation.py`: adds seven search tests and a route
+  validation helper checking endpoints, length, free cells, and unit steps.
+- This record adds search decisions, test evidence, and a worked search.
+
+The implementation adapts the queue/cost/predecessor structure inspected in
+Ansur's `SensorMapPlanner._plan` on the cached trench mission branch. It uses
+the existing `Grid.neighbors` and `manhattan_distance` functions. Sensor-built
+maps, diagonal movement, exploration fallbacks, and unknown-space penalties
+are not imported. No second map representation or mission controller is added.
+
+### How search works
+
+`g` is the best known number of steps from the start to a cell. `h` is the
+Manhattan estimate of steps remaining. `f = g + h` is the priority for further
+exploration. Python's `heapq` is a priority queue: it efficiently selects the
+entry with the smallest priority without sorting the entire collection.
+
+Entries contain `(f, insertion_number, g, cell)`. The increasing insertion
+number makes equal priorities follow discovery order, combined with the
+grid's east/north/west/south order. Tests require repeatability and shortest
+length, without requiring one specific route when several shortest routes tie.
+
+For each legal neighbor, search considers a route one step longer than the
+current route. If it improves the neighbor's known cost, both that cost and
+its predecessor (the cell it came from) are updated and a new entry is queued.
+Old entries remain in the queue; when selected, an entry whose stored cost
+differs from the current best is skipped. The goal is accepted only when
+selected for expansion after this check. Predecessors are followed backward
+from the goal, then reversed to return the start-to-goal route.
+
+The return value includes both endpoints. Start equal to goal produces a
+one-cell route, provided that cell is valid. Blocked, out-of-bounds, or
+malformed endpoints raise `ValueError`. Valid but disconnected endpoints
+return `None`; a partial route is not substituted for reaching the goal.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Open-map shortest route includes both endpoints | PASS | 4-by-3 grid returns a valid 5-step route |
+| Route detours around supplied obstacles | PASS | 3-by-2 grid returns a valid 4-step route |
+| Returned cells and consecutive moves are legal | PASS | Shared assertions in all four nontrivial route tests |
+| Cheaper discoveries update cost and predecessor | PASS | Regression route has 17 steps; runtime trace records `(4, 3)` improving from 11 to 9 |
+| Obsolete entries are skipped | PASS | Code check and runtime trace of outdated `(4, 3)` entry with stored cost 11 and best cost 9 |
+| Finish when goal is selected, not first discovered | PASS | Goal check follows queue removal and freshness check; tiny search trace below |
+| Equal-priority choices are deterministic | PASS | Repeated calls return the same shortest route |
+| Invalid endpoints differ from no route | PASS | Four invalid endpoint cases raise; disconnected valid endpoints return `None` |
+| Start equal to goal returns one valid cell | PASS | Focused one-cell route test |
+
+### Tests and results
+
+Exact test command from the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
+```
+
+Seven search tests were written first. A temporary search skeleton returning
+`None` allowed behavioral assertions to run before implementing the search.
+Red result: exit 1, 21 methods run, nine assertion failures including endpoint
+subtests, zero errors, zero skips. The 14 existing tests and the disconnected
+case passed; that case alone could not distinguish the skeleton from search.
+
+After replacing the skeleton with search: exit 0, all 21 tests passed, zero
+failures, zero errors, zero skips. Interpreter remains Python 3.14.7. No Docker
+build, dependency installation, sensor, radio, or flight operation was needed.
+
+The regression map was selected using a deterministic, hardware-free
+exploratory script comparing search with and without cheaper-cost updates.
+The exploratory first-discovery-only search returned 19 steps; the actual
+implementation returns 17. This exploration was not a controlled mutation of
+the actual implementation and is not counted as mutation evidence. The test
+checks the route's validity and length, not internal dictionary contents.
+
+Mutation checks: NOT DUE in Chunk 3. The prior boundary/distance checkpoint
+remains recorded in Chunk 2. Actual planner mutations and independent
+breadth-first-search comparisons are due in Chunk 4.
+
+### Executed worked search
+
+Exact example command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, astar; grid = Grid(3, 2, blocked={(1, 0)}); route = astar(grid, (0, 0), (2, 0)); print('route:', route); print('steps:', len(route) - 1); print('unreachable:', astar(Grid(3, 2, blocked={(1, 0), (1, 1)}), (0, 0), (2, 0)))"
+```
+
+Actual output, exit 0:
+
+```text
+route: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
+steps: 4
+unreachable: None
+```
+
+For the first input, the direct step east is blocked. A temporary diagnostic
+using Python's `sys.settrace` observed the actual implementation without
+editing it. Its selected cells and predecessor assignments were:
+
+| Selected cell | g: steps so far | h: estimate remaining | f: priority | New predecessor assignment |
+|---|---:|---:|---:|---|
+| `(0, 0)` | 0 | 2 | 2 | `(0, 1)` comes from `(0, 0)`, cost 1 |
+| `(0, 1)` | 1 | 3 | 4 | `(1, 1)` comes from `(0, 1)`, cost 2 |
+| `(1, 1)` | 2 | 2 | 4 | `(2, 1)` comes from `(1, 1)`, cost 3 |
+| `(2, 1)` | 3 | 1 | 4 | `(2, 0)` comes from `(2, 1)`, cost 4 |
+| `(2, 0)` | 4 | 0 | 4 | Goal selected; follow predecessors backward |
+
+The estimate initially understates the four-step detour, as expected.
+The same diagnostic on the 8-by-7 regression input observed the predecessor
+of `(4, 3)` being replaced with `(3, 3)`, reducing its cost from 11 to 9, and
+the old queue entry later being skipped. No tracing code was added to the
+production module or tests, and no diagnostic artifacts were saved in Git.
+
+### Limitations, Git state, and next proposed chunk
+
+This is offline pathfinding for a static, supplied, four-direction unit-cost
+map. Broad edge-case coverage, independent shortest-path verification, and
+planner mutations are still pending. Physical conversion, clearance,
+candidate policy, and waypoint following are not implemented. Fixed-altitude
+suitability and localization must be physically validated; these results do
+not demonstrate physical flight readiness.
+
+Only the navigation module, its tests, and this progress record changed for
+Chunk 3. They remain unstaged and uncommitted. No commit or push was performed.
+Pre-existing README modifications and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch is
+`astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
+No outgoing commits exist against the cached upstream. Whitespace checks
+use `git diff --check`.
+
+Next proposal: Chunk 4 will strengthen invalid-input and difficult-map cases,
+compare shortest lengths with an independently written breadth-first-search
+test oracle, and challenge obstacle checking and reconstruction with isolated
+faults. Its purpose must be reviewed before implementation begins. Stop here
+for Chunk 3 review; commit and push also require explicit approval.

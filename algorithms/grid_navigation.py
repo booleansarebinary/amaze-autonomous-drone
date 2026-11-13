@@ -6,7 +6,9 @@ Only listed obstacles are blocked; every other in-bounds cell is free.
 Physical use requires validating the altitude model and localization.
 """
 
+import heapq
 from dataclasses import dataclass
+from itertools import count
 
 
 Cell = tuple[int, int]
@@ -72,3 +74,47 @@ class Grid:
         x, y = cell
         candidates = [(x + 1, y), (x, y + 1), (x - 1, y), (x, y - 1)]
         return [neighbor for neighbor in candidates if self.is_traversable(neighbor)]
+
+
+def astar(grid: Grid, start: Cell, goal: Cell) -> list[Cell] | None:
+    """Return a shortest cardinal route including both endpoints, or None.
+
+    Blocked, out-of-bounds, or malformed endpoints raise ValueError.
+    Equal priorities are explored in insertion order for repeatable routes.
+    """
+    for name, cell in (("start", start), ("goal", goal)):
+        if not grid.is_traversable(cell):
+            raise ValueError(f"{name} must be an in-bounds, unblocked cell: {cell}")
+
+    # heapq selects the smallest entry. The sequence number breaks priority
+    # ties in discovery order; cost is retained to recognize obsolete entries.
+    sequence = count()
+    frontier = [(manhattan_distance(start, goal), next(sequence), 0, start)]
+    best_cost = {start: 0}
+    predecessors: dict[Cell, Cell] = {}
+
+    while frontier:
+        _, _, cost, cell = heapq.heappop(frontier)
+        # A cheaper route may have been queued since this entry was inserted.
+        if cost != best_cost[cell]:
+            continue
+        # Finish when selected for expansion, after checking entry freshness.
+        if cell == goal:
+            route = [cell]
+            while cell != start:
+                cell = predecessors[cell]
+                route.append(cell)
+            route.reverse()
+            return route
+
+        for neighbor in grid.neighbors(cell):
+            candidate_cost = cost + 1
+            if candidate_cost < best_cost.get(neighbor, float("inf")):
+                best_cost[neighbor] = candidate_cost
+                predecessors[neighbor] = cell
+                priority = candidate_cost + manhattan_distance(neighbor, goal)
+                heapq.heappush(
+                    frontier, (priority, next(sequence), candidate_cost, neighbor)
+                )
+
+    return None
