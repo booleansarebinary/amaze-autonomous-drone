@@ -1744,3 +1744,300 @@ handling, command ownership with reactive avoidance, and requirements for the
 connection from measured start to the first waypoint and physical testing.
 Review that purpose before beginning. No implementation, radio, or flight
 commands are authorized by that design proposal. Stop here for 8B review.
+
+Subsequent approved Git outcome: 8B was committed as `37c7934`
+(`Plan obstacle-aware returns after simulated detection`) and pushed alone to
+`origin/MAIN_collect_the_astrophage`. No additional behavior was added during
+that commit/push. The preceding uncommitted status describes the original review.
+
+## Chunk 9: waypoint-follower design only - COMPLETE FOR REVIEW
+
+### Purpose, scope, and files
+
+After reviewing the design-only purpose, the user authorized continuation.
+This chunk inspects the actual command and localization interfaces and records
+how a later measured-position follower could consume the existing routes.
+No production functions, tests, flight commands, or dependencies were changed.
+
+- Added `docs/astrophage-waypoint-follower-design.md`: source findings,
+  coordinate and first-movement requirements, proposed feedback loop,
+  arrival criteria, stale-data handling, command ownership, and physical gates.
+- Updated this engineering record with inspection evidence and review status.
+- Recorded 8B's approved commit/push above; unrelated local edits are preserved.
+
+The mission and design documents were reread. Their future physical collection
+requirements still apply; the user's offline-first priority supersedes their
+earlier sensor-first ordering. No branch recreation or hardware stage was run.
+
+### Inspection evidence and reuse decisions
+
+Read the current `astrophage_collection_script.py`, `candidate_visits.py`, and
+`grid_navigation.py`. Also read Ansur's sibling `reactive_nav.py` controller
+and flight/telemetry loop and the locally installed cflib source and metadata.
+No applicable AGENTS.md was found in the inspected ancestor/repository paths.
+
+Representative exact inspection commands, run from this worktree:
+
+```powershell
+Get-Content algorithms/astrophage_collection_script.py
+Get-Content C:\Users\victo\amaze-test-flight\algorithms\reactive_nav.py | Select-Object -Skip 819 -First 150
+Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\positioning\position_hl_commander.py | Select-Object -Skip 228 -First 57
+Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\crazyflie\high_level_commander.py | Select-Object -Skip 128 -First 53
+Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\positioning\motion_commander.py | Select-Object -Skip 325 -First 92
+Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\utils\reset_estimator.py
+```
+
+All these source reads succeeded. Findings are limited to inspected local
+cflib 0.1.33 and this repository state; firmware compatibility is not established.
+An initial `rg` invocation with a wildcard directory in its literal path failed
+with Windows error 123. Enumerating `cflib*.dist-info` using `Get-ChildItem` and
+reading its METADATA resolved the lookup and confirmed version 0.1.33.
+
+Reuse the tested grid, A*, conversions, clearance map, and candidate policy.
+For future adapter design, existing nonblocking MotionCommander-style requests
+offer an interruptible command family. Reuse of that library does not validate
+its physical pause behavior or authorize creating its takeoff/landing context.
+Ansur's pure controller is a possible later avoidance input; its flight loop
+is not an additional command owner and is not imported into the offline policy.
+
+Important findings documented in the design:
+
+- `PositionHlCommander.go_to` waits calculated time, then updates remembered
+  coordinates. `get_position` returns those coordinates, not measured arrival.
+- High-level `go_to` may generate curves from nonzero velocity; straight grid
+  steps do not prove that trajectory stays within the planned region.
+- High-level `stop` turns motors off; MotionCommander `stop` requests zero
+  velocity. Neither name alone establishes a validated fault/hover response.
+- The reactive log callback ignores device time, initially has zero estimates,
+  lacks freshness checks and altitude in that log block. Variable semantics
+  and firmware availability remain to be verified.
+- The collection script uses grid points and a y-flip, while the offline map
+  uses cell centers. A deliberate frame conversion is required before reuse.
+- Resetting the estimator and observing stable variance do not establish map
+  origin/alignment, measured absolute accuracy, or bounded localization drift.
+
+### How the proposed follower would work
+
+Convert the supplied route into centers with existing GridCoordinates, after
+registering map and measured-pose frames. Check the continuous connection from
+actual pose to the first center. Follow one waypoint at a time using fresh,
+coherent position/velocity/altitude/yaw, limiting motion within the validated
+route region. Advance only after position, height, and speed satisfy configured
+limits continuously; repeated old samples cannot confirm arrival.
+
+One mission-owned adapter sends commands. Candidate/return routing and any
+future reactive component supply intentions, not competing command loops.
+Stale pose or a fault cancels travel intent, resets settling, and invokes a
+separately validated response. Reacquisition requires route/frame revalidation.
+No host command is assumed to arrive after radio loss. A canceled route cannot
+later regain ownership by completing an old timer or background command.
+
+This is proposed behavior, not an implemented follower. Simulated detection
+currently switches route planning to home immediately. Real collection must
+later distinguish search cancellation, hold, verified settling, collection
+dwell, authorized return, arrival, and landing.
+
+### Hypothetical worked example
+
+The design includes a hand-calculated example, not an executed follower:
+5-by-4 grid, blocked `(2,1)`, size 0.25 m, origin `(0,0)`, and supplied route
+`[(1,1),(1,2),(2,2),(3,2)]` convert to centers
+`[(0.375,0.375),(0.375,0.625),(0.625,0.625),(0.875,0.625)]` meters.
+Hypothetical measured `(0.38,0.39)` is about 0.016 m from the first center.
+With illustrative tolerance 0.04 m, a 0.30 s qualifying settling interval,
+and age limit 0.15 s, fresh settled evidence would allow the next segment;
+a 0.20 s-old sample would pause it. Velocity/height criteria and the checked
+continuous connection are also required. These numbers are not flight settings.
+
+### Acceptance criteria and verification
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Inspect actual command and localization interfaces | PASS | Current script, reactive adapter, installed commander/reset sources and package metadata read |
+| Reuse routes and distinguish measured pose from command targets | PASS | Existing components retained; timed commander coordinates explicitly excluded as arrival evidence |
+| Specify tolerances and stale-localization behavior | PASS AS DESIGN | Continuous position/height/speed settling; sample age/order/reset and explicit reacquisition requirements |
+| Explain sole command ownership and reactive interaction | PASS AS DESIGN | Single adapter, route revocation, avoidance cannot independently send or bypass mapped obstacles |
+| Identify unchecked actual-start connection | PASS | Pose-to-first-center check, offset/frame mismatch, turns and final home connection called out |
+| Document physical validation requirements | PASS AS DESIGN | Telemetry, fixed-altitude volume, localization, clearance/tracking/braking, link-loss/operator evidence pending |
+| Keep chunk design only, with no hardware claims | PASS | Only two documentation files changed; no imports/execution of flight interfaces |
+
+Implementation tests: NOT APPLICABLE. No test files were added or executed;
+there is no follower implementation to demonstrate failing/passing behavior.
+Mutation checks: NOT APPLICABLE for design only. The prior 8B suite's 92 passing
+tests are historical planner/policy evidence, not evidence for this design.
+Documentation verification uses `git diff --check` on the progress record and
+`git diff --no-index --check -- NUL docs/astrophage-waypoint-follower-design.md`
+on the new file. Checked individually, the tracked-file check exited 0;
+the no-index check exited 1 because the new file differs from NUL. Neither
+reported whitespace errors (only Git's existing LF-to-CRLF conversion warning).
+The new-file difference exit is not a failed implementation test.
+
+### Remaining limitations, Git state, and next proposal
+
+All follower behavior remains unimplemented. Numeric settings, actual firmware
+log variables/units, estimator quality, safe command interruption, physical
+frame alignment, fixed-altitude validity, first/final connections, and command
+ownership need offline tests and later physical validation. Offline A* results
+do not establish physical flight readiness. No hardware evidence was collected.
+
+Chunk 9 remains unstaged/uncommitted; nothing was committed or pushed this turn.
+Branch is `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`;
+HEAD is the pushed 8B commit `37c7934`, with no outgoing commits against cached
+origin. Existing README changes and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Temporary
+artifacts and the earlier preservation stash are not staged.
+
+This completes the requested chunks through the Chunk 9 design review. A
+possible next small chunk, requiring purpose review and authorization, is an
+offline coherent-pose/freshness gate with a fake clock and no cflib import.
+It would distinguish no sample, valid fresh sample, and invalid/stale sample,
+without movement or waypoint-following yet. No further chunk is started.
+
+## Plain-language recap of every chunk
+
+This recap describes what was built or inspected, not what a drone has proved
+it can do. Maps, starting positions, and candidate locations are supplied by
+a person. No hidden real/fake label is used to choose where to go.
+
+| Chunk | What it did, in plain terms |
+|---|---|
+| 0 - Look at the project first | Read the instructions, mission plans, existing navigation, tests, Docker setup, and Git state. Decided which existing ideas to reuse. Changed no files. |
+| 1 - Make a square-cell map | Represented the map as rows and columns of cells. Marked blocked cells and found legal moves up, down, left, and right. Defined each location as `(x, y)`. |
+| 2 - Estimate remaining steps | Added the number of horizontal steps plus vertical steps to the goal, ignoring obstacles. This helps the search decide what to try first. |
+| 3 - Find a complete route | Added A*: a search that finds a shortest route around blocked cells. It remembers how it reached each cell so it can return the full route. |
+| 4 - Check difficult cases | Checked bad inputs, impossible routes, tight passages, and different map shapes. Compared route lengths with a separate simple search. Deliberately broke parts of the planner to check that tests noticed. |
+| 5 - Turn cells into meters | Added cell size and map origin so a cell can be converted to its center in meters, and a meter position can be placed in its containing cell. This sets a coordinate convention; it does not measure the room or drone. |
+| 6 - Leave space around obstacles | Made extra cells unavailable near obstacles and map edges to leave room for the drone and an extra allowance. Those sizes still need real measurements. |
+| 7A - Show a route in the terminal | Added a command-line demo that reads a supplied map and prints the planned route using text symbols. It also reports when no route exists. |
+| 7B - Save a picture | Added an optional picture showing obstacles, extra reserved space, start, goal, and planned route. It is a plan, not a picture of measured flight. |
+| 7C - Save the plan as data | Added JSON output: a structured text file containing the route, map, and planning settings so other tools can read them. |
+| 8A - Choose which candidate to visit | Tries candidates in the supplied order, skips locations already confirmed visited, and reports unreachable locations. Planning a visit does not mark it completed. |
+| 8B - Plan home after simulated detection | An explicit simulated detection stops choosing candidates. A* calculates a fresh route from the supplied current cell to home. It does not replay the outbound route or move the drone. |
+| 9 - Design how to follow a route | Inspected the real command interfaces and wrote down how a future follower must check measured position, arrival, old data, and who can send movement commands. No follower was implemented. |
+
+The result so far is a tested offline route planner, a small candidate/return
+policy, demos, saved plans, and a follower design. The latest executed
+implementation suite passed all 92 tests with plotting installed. Without
+plotting, 86 passed and six optional picture tests were skipped. Deliberate
+fault checks are recorded above. These results do not demonstrate physical
+flight, sensor detection, collection, or a complete hardware mission.
+
+## Current design problems and missing pieces
+
+1. **A route is not a working flight follower.** The offline code returns
+   locations to visit. Nothing in that code checks live drone position and
+   moves between those locations. The separate collection script sends flight
+   commands, but waits a calculated time rather than checking measured arrival.
+   Its remembered destination must not be used as proof of where the drone is.
+
+2. **The two navigation paths are not connected.** The collection script has
+   its own planner and coordinate rules. The tested offline planner uses cell
+   centers; the script uses grid points and flips one axis. We need one agreed
+   route-to-command connection using the tested components, with explicit
+   conversions. Do not combine the two by passing coordinates straight across.
+
+3. **We have not proved that the map matches the drone's position readings.**
+   The origin, axis directions, heading, units, and height reference must agree.
+   We also need to measure how far position readings can be wrong or drift
+   over time. Resetting the position estimator does not prove this agreement.
+
+4. **Some actual movements have never been checked.** Getting from the actual
+   start to the first cell center, turning between waypoints, and moving from
+   the home cell center to the exact takeoff point all need collision checks.
+   So do takeoff and landing. A list of free cells does not prove that a curved
+   movement or an overshoot will stay clear of obstacles.
+
+5. **The map and space allowances are assumptions.** The map is static and
+   does not discover new obstacles. A flat map works only if the chosen flying
+   height is clear along the whole route. Drone size, position error, stopping
+   distance, and tracking error need measured allowances. The current planner
+   can also reject usable narrow routes because it reserves whole cells.
+
+6. **Arrival and failure rules are not implemented.** We must define how close
+   is close enough, how slowly the drone must be moving, and how long it must
+   stay settled. We must reject missing, old, repeated, or invalid position
+   readings. Loss of position or radio needs a tested response. A command
+   called `stop` cannot be assumed to hover: the inspected high-level version
+   turns motors off. A radio-loss command cannot be assumed to arrive.
+
+7. **Only one part of the system may control movement at a time.** Candidate
+   travel, return travel, reactive obstacle avoidance, collection hold, and
+   operator intervention need one shared command owner. Canceling a route
+   must prevent its old commands from running later. Reactive avoidance is
+   currently separate and requires sensor data that this offline work does
+   not provide. Running both existing flight loops together is not integration.
+
+8. **Simulated detection leaves out real collection.** Today a supplied event
+   switches planning straight to home. The physical mission needs separate
+   stages: stop searching, check the detection, settle above the station,
+   stay there for the collection time, record collection once, then return.
+   Planning a return cannot count as completing collection or getting home.
+
+9. **The sensor connection and its reliability are still unresolved.** We need
+   the actual sensor and board details, valid wiring, message format, timing,
+   station identity, and handling for missing or repeated messages. An
+   ultrasonic reading says something is in its beam; it does not by itself
+   prove that the drone is correctly centered at the right station. We must
+   measure missed detections, false detections, and delays, including whether
+   readings remain useful with the drone flying.
+
+## What must be resolved before the combined hardware mission
+
+These are proposed steps for later review, not authorization to connect or fly
+hardware. We can build and check the missing software with fake inputs first.
+
+1. **Finish the movement logic offline.** Use made-up position samples and a
+   fake command receiver to check fresh data, coordinate conversions, first
+   movement, waypoint arrival, route cancellation, obstacle checks, and return.
+   Check failures as well as success. Deliberately break important checks and
+   confirm that the tests catch the mistakes before restoring correct code.
+
+2. **Settle how the existing pieces fit together.** Choose the tested planner
+   and one command owner as the integration path. Decide how the collection
+   script will reuse that path, how reactive avoidance may interrupt it, and
+   how the operator can take control. Do not leave two independent movement
+   loops sending commands to the same drone.
+
+3. **Check the sensor on its own.** Identify the board and sensor, verify their
+   electrical requirements, read real measurements in a terminal, and test
+   their useful height and offset range. Define a message format that lets
+   the computer reject bad, old, duplicate, or wrong-station events. Measure
+   errors and delays; do not choose thresholds from guesses alone.
+
+4. **Check drone position data without flight.** Discover the actual firmware
+   fields and units, read position, speed, heading, and height, and check their
+   timing and quality. Confirm which positioning hardware is present. Do not
+   treat zeros, remembered commands, or a detected deck as usable live position.
+   This step must not enter a commander context that automatically takes off.
+
+5. **Measure and align the physical setup.** Establish map origin and axes,
+   check position accuracy and drift, measure the drone and available space,
+   and confirm that one flying height is suitable. Choose clearance, speed,
+   braking, arrival, and stale-data limits from evidence. Check first/final
+   connections and the vertical takeoff/landing space separately.
+
+6. **Define and validate failure handling before autonomous flight.** Establish
+   what happens on old position readings, sensor loss, radio loss, no route,
+   unexpected obstacles, and operator cancellation. Check the drone firmware's
+   own behavior when commands stop arriving. A host-side pause request is not
+   a complete failure plan.
+
+7. **Build the collection sequence and then validate it in controlled stages.**
+   First test detection, settling, collection time, one collection record,
+   and return using fake inputs. Later, under a separately approved physical
+   plan, check short movements and measured arrival, then collection hold,
+   sensor performance during flight, and an obstacle-aware outbound/return.
+   Record planned positions separately from measured positions and record
+   failed trials as well as successful ones.
+
+The current work provides no evidence that these physical checks have passed.
+The full mission remains pending until the sensor, localization, movement,
+collection, and return work together with measured results.
+
+This recap and the Chunk 9 design are documentation only. No additional tests
+or mutations were invented for this edit. Earlier Git status statements are
+review-time snapshots; the requested documentation commit/push is subsequent
+to those snapshots. Only this progress record and the follower design belong
+to that change; the existing README edits and three document deletions remain
+excluded. Detailed command-interface findings are in
+[the follower design](astrophage-waypoint-follower-design.md).
