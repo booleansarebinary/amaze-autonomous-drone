@@ -125,5 +125,99 @@ class CandidateVisitsTests(unittest.TestCase):
             self.assertNotIn(cell, planning.blocked)
 
 
+class CandidateReturnTests(unittest.TestCase):
+    def test_detection_plans_home_from_supplied_current_not_selected_target(self):
+        visits = CandidateVisits(Grid(6, 3), [(5, 1), (4, 2)], home=(0, 1))
+        self.assertEqual(visits.plan_next((0, 1)).target, (5, 1))
+        plan = visits.simulate_detection((2, 1))
+        self.assertEqual(plan.status, "return_planned")
+        self.assertEqual(plan.target, (0, 1))
+        self.assertEqual(plan.route, ((2, 1), (1, 1), (0, 1)))
+        self.assertEqual(plan.unreachable, ())
+        self.assertEqual(visits.visited, frozenset())
+        following = visits.plan_next((1, 1))
+        self.assertEqual(following.status, "return_planned")
+        self.assertEqual(following.route, ((1, 1), (0, 1)))
+
+    def test_return_detours_around_obstacle_with_valid_unit_steps(self):
+        grid = Grid(5, 3, blocked={(2, 1)})
+        visits = CandidateVisits(grid, [(4, 2)], home=(0, 1))
+        plan = visits.simulate_detection((4, 1))
+        self.assertEqual(plan.status, "return_planned")
+        self.assertEqual((plan.route[0], plan.route[-1]), ((4, 1), (0, 1)))
+        for cell in plan.route:
+            self.assertTrue(grid.is_traversable(cell))
+        for first, second in zip(plan.route, plan.route[1:]):
+            self.assertEqual(abs(first[0] - second[0]) + abs(first[1] - second[1]), 1)
+        self.assertEqual(len(plan.route) - 1, 6)
+
+    def test_unreachable_home_never_resumes_candidate_search(self):
+        grid = Grid(5, 3, blocked={(2, y) for y in range(3)})
+        visits = CandidateVisits(grid, [(4, 2)], home=(0, 1))
+        self.assertEqual(visits.plan_next((4, 1)).target, (4, 2))
+        for plan in [visits.simulate_detection((4, 1)), visits.plan_next((3, 1))]:
+            self.assertEqual(plan.status, "return_unreachable")
+            self.assertEqual(plan.target, (0, 1))
+            self.assertIsNone(plan.route)
+            self.assertEqual(plan.unreachable, ())
+        # A new supplied position is an offline input, not evidence of crossing the wall.
+        plan = visits.plan_next((1, 1))
+        self.assertEqual(plan.status, "return_planned")
+        self.assertEqual(plan.route, ((1, 1), (0, 1)))
+
+    def test_home_position_and_repeated_events_do_not_restart_search(self):
+        visits = CandidateVisits(Grid(4, 2), [(3, 0)], home=(0, 0))
+        for plan in [visits.simulate_detection((0, 0)),
+                     visits.simulate_detection((1, 0)), visits.plan_next((0, 0))]:
+            self.assertEqual(plan.status, "return_planned")
+            self.assertEqual(plan.target, (0, 0))
+            self.assertEqual(plan.route[-1], (0, 0))
+        self.assertEqual(visits.plan_next((0, 0)).route, ((0, 0),))
+        self.assertEqual(visits.visited, frozenset())
+
+    def test_detection_preserves_visits_and_cancels_pending_confirmation(self):
+        visits = CandidateVisits(Grid(4, 2), [(1, 0), (3, 0)], home=(0, 0))
+        visits.plan_next((0, 0))
+        visits.confirm_visit((1, 0))
+        visits.plan_next((1, 0))
+        plan = visits.simulate_detection((2, 0))
+        self.assertEqual(plan.status, "return_planned")
+        with self.assertRaises(ValueError):
+            visits.confirm_visit((3, 0))
+        self.assertEqual(visits.visited, frozenset({(1, 0)}))
+
+    def test_invalid_home_or_detection_position_is_rejected_without_transition(self):
+        grid = Grid(4, 2, blocked={(1, 1)})
+        for invalid in [(1, 1), (-1, 0), (4, 0), (0, 2), (0.5, 0), [0, 0]]:
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    CandidateVisits(grid, [(3, 0)], home=invalid)
+                visits = CandidateVisits(grid, [(3, 0)], home=(0, 0))
+                with self.assertRaises(ValueError):
+                    visits.simulate_detection(invalid)
+                self.assertEqual(visits.plan_next((2, 0)).target, (3, 0))
+        visits = CandidateVisits(grid, [(3, 0)])
+        with self.assertRaises(ValueError):
+            visits.simulate_detection((2, 0))
+        self.assertEqual(visits.plan_next((2, 0)).status, "target_selected")
+
+    def test_return_works_without_candidates(self):
+        visits = CandidateVisits(Grid(3, 2), [], home=(0, 0))
+        self.assertEqual(visits.plan_next((2, 0)).status, "no_targets")
+        self.assertEqual(visits.simulate_detection((2, 0)).status, "return_planned")
+        self.assertEqual(visits.plan_next((1, 0)).route, ((1, 0), (0, 0)))
+
+    def test_return_uses_the_same_clearance_adjusted_grid(self):
+        original = Grid(9, 7, blocked={(4, 3)})
+        grid = inflate_obstacles(GridCoordinates(original, 0.25), 0.1, 0.05)
+        visits = CandidateVisits(grid, [(7, 4)], home=(1, 3))
+        plan = visits.simulate_detection((7, 3))
+        self.assertEqual(plan.status, "return_planned")
+        self.assertEqual((plan.route[0], plan.route[-1]), ((7, 3), (1, 3)))
+        self.assertEqual(len(plan.route) - 1, 10)
+        for cell in plan.route:
+            self.assertTrue(grid.is_traversable(cell))
+
+
 if __name__ == "__main__":
     unittest.main()

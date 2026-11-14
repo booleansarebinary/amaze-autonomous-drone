@@ -1574,3 +1574,173 @@ before fast-forwarding, then restored and checked byte for byte. The local
 stash is retained as a backup. README edits and the three document deletions
 remain outside the proposed commit. This reconciliation broadens 8A's file
 list only to preserve the explicitly requested active navigation layout.
+
+Approved Git outcome: `42e3915` (`Plan candidate visits in supplied order`)
+was committed and pushed to `origin/MAIN_collect_the_astrophage`. The push
+contained exactly that one new commit, building on incoming `07d2a57`.
+The prior pre-commit status above is retained as the original review record.
+After reconciliation, all 84 tests passed with Matplotlib; the visited-skip
+mutation again caused three assertion failures and its restored baseline passed.
+
+## Chunk 8B: simulated detection and obstacle-aware return - PASS
+
+### Purpose and changes
+
+The previously reviewed return purpose was authorized alongside the 8A push.
+The existing `CandidateVisits` policy is extended rather than introducing a
+second controller, map format, or search algorithm. The incoming collection
+script was inspected: its `plan` function plans all legs in advance, and its
+`fly` function sends commands and waits. It supplies no reusable simulated
+detection transition or candidate visit bookkeeping. It remains unchanged
+and was not run. Navigation still uses the established offline grid and A*.
+
+- `algorithms/candidate_visits.py`: constructor accepts optional keyword-only
+  `home`; `simulate_detection` accepts the explicit offline event; internal
+  current-cell validation and return planning reuse the existing grid/A*.
+  `plan_next` continues return planning once detection is accepted.
+- `algorithms/test_candidate_visits.py`: eight new return behavior tests,
+  keeping the ten existing candidate tests unchanged.
+- This progress record captures acceptance, executed tests, and limitations.
+
+### How it works
+
+Home must be an unblocked, in-bounds integer cell on the supplied grid.
+Omitting it keeps the 8A interface working, but attempting simulated detection
+without home raises `ValueError`. Invalid home is rejected at construction.
+Invalid event position is rejected before changing search state.
+
+`simulate_detection(current)` is an explicit caller assertion in an offline
+simulation, not a sensor reading. After validation it remembers that return
+was requested, cancels the pending candidate, and calls A* from the supplied
+current cell to home. It never substitutes the selected candidate for current,
+marks a new visit, or consumes hidden real/fake identity.
+
+| Status | Target | Route | Meaning |
+|---|---|---|---|
+| `return_planned` | Home | Immutable cells including both endpoints | A route exists on the supplied map |
+| `return_unreachable` | Home | `None` | Valid endpoints have no connecting route |
+
+`unreachable` remains a list of candidate locations tried during selection;
+it is empty for return results. The return status conveys home reachability.
+Blocked home is invalid input, distinct from valid but disconnected home.
+
+Later `plan_next(current)` calls always plan home, including after a failed
+return. Repeated simulated events replan home without restarting search.
+There is no reset method; a fresh offline scenario uses a new policy instance.
+Previously confirmed visits remain recorded, and the canceled selection can
+no longer be confirmed. Supplied current at home produces a one-cell planned
+route; no physical-arrival, collection-complete, or landed state is inferred.
+The same original or clearance-adjusted grid is used in both directions.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Use explicit simulated external detection | PASS | Dedicated simulation method; no sensor or identity fields |
+| Return starts at supplied current, not pending candidate | PASS | Detection from an intermediate cell checks exact endpoints |
+| Stop subsequent candidate selection after detection | PASS | Later planning and repeated events target home |
+| Preserve visits and invalidate pending confirmation | PASS | Confirmed set retained; canceled candidate confirmation raises |
+| Route around return obstacles with valid cardinal steps | PASS | Six-step detour checks every cell and adjacent pair |
+| Do not resume search when home is unreachable | PASS | Wall-separated home reports no route on repeated planning |
+| Distinguish invalid inputs from disconnected home | PASS | Blocked/outside/malformed home/current rejected; disconnected free home returns status |
+| Handle no candidates and supplied current at home | PASS | Empty candidate case returns home; one-cell home route tested |
+| Reuse clearance-adjusted map on return | PASS | Ten-step clearance detour avoids all excluded cells |
+| Complete return mutation checkpoint without hardware | PASS | Obstacle bypass and lost return-state faults caught by behavioral assertions |
+
+### Test-first evidence and exact commands
+
+Eight new tests were written before the behavior. An interface-only skeleton
+accepted the optional home argument but always returned `no_targets` for the
+event and performed no home validation. Executed red command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_candidate_visits -q
+```
+
+Result: exit 1, 18 methods total, 14 behavioral assertion failures including
+subtests, zero errors/skips. The ten original candidate methods still passed.
+The implementation resolved these failures; the same command passed all 18.
+
+Full commands after mutation restoration:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
+$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
+```
+
+Without plotting: exit 0, 92 methods total, 86 passed, six optional image tests
+skipped, zero failures/errors. With plotting: exit 0, all 92 passed, zero
+failures/errors/skips. No dependency installation or Docker/hardware run.
+
+### Controlled mutations
+
+Exact command, with the driver kept outside the repository:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk8b_mutation_check.py
+```
+
+The actual policy, grid, and unchanged candidate tests were copied into an
+isolated temporary package containing no hardware adapters. Baseline: all 18
+passed. Faults were introduced one at a time into the copied implementation:
+
+| Injected fault | Intended detecting test | Actual outcome |
+|---|---|---|
+| Return A* receives an empty grid with the same dimensions, ignoring obstacles | `test_return_detours_around_obstacle_with_valid_unit_steps` | Fails because a returned cell is blocked; clearance and unreachable-home tests also fail (three assertion failures) |
+| Detection sets the remembered return request to false | `test_detection_plans_home_from_supplied_current_not_selected_target` | Fails because later planning selects a candidate; three other return-state assertions also fail (four failures) |
+
+Each mutant exited 1 with behavioral assertion failures, no errors/skips.
+Correct source was restored after each, and all 18 tests passed after each
+restoration. No survivor or equivalent mutant required coverage repair.
+Copied tests were unchanged, SHA-256 checks proved workspace files unchanged,
+and the temporary copy was removed. Driver exited 0. The normal full suites
+then passed as recorded above. Together with 8A's visited-tracking check,
+these results complete the Chunk 8 checkpoint; no deliberate faults are tracked.
+
+### Executed worked example
+
+Exact command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.candidate_visits import CandidateVisits; from algorithms.grid_navigation import Grid; visits=CandidateVisits(Grid(5,3,{(2,1)}),[(4,2)],home=(0,1)); print('search:',visits.plan_next((4,1))); print('detection:',visits.simulate_detection((4,1))); print('next:',visits.plan_next((3,2))); print('visited:',sorted(visits.visited)); wall=CandidateVisits(Grid(5,3,{(2,y) for y in range(3)}),[(4,2)],home=(0,1)); print('wall:',wall.simulate_detection((4,1)))"
+```
+
+Actual output, exit 0:
+
+```text
+search: CandidatePlan(status='target_selected', target=(4, 2), route=((4, 1), (4, 2)), unreachable=())
+detection: CandidatePlan(status='return_planned', target=(0, 1), route=((4, 1), (3, 1), (3, 2), (2, 2), (1, 2), (0, 2), (0, 1)), unreachable=())
+next: CandidatePlan(status='return_planned', target=(0, 1), route=((3, 2), (2, 2), (1, 2), (0, 2), (0, 1)), unreachable=())
+visited: []
+wall: CandidatePlan(status='return_unreachable', target=(0, 1), route=None, unreachable=())
+```
+
+The first return takes six steps around blocked `(2, 1)` rather than four
+through it. A later supplied position replans home instead of targeting the
+candidate. A complete wall at x=2 makes home unreachable. These are actual
+executed offline planning outputs; positions and events are simulated inputs.
+
+### Limitations, Git state, and next proposed purpose
+
+This adds neither real sensor validation nor hold/collection dwell. There is
+no command ownership, localization freshness, flight/landing, or integration
+with the new physical collection script. The caller supplies static map,
+home, and current cells. Invalid current is rejected without resuming search.
+Fixed-altitude suitability, localization, map alignment, clearance values,
+and the physical-start-to-first-waypoint connection require validation before
+physical use. Offline route tests do not establish physical flight readiness.
+
+8A is committed and pushed as `42e3915`; 8B modifies only the policy, its tests,
+and this record. All 8B changes remain unstaged/uncommitted and were not pushed.
+Existing README edits and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` are preserved and excluded.
+No outgoing commits remain. The preservation stash and external snapshot are
+retained; logs, mutation driver/copies, and plotting caches remain outside commits.
+
+Next proposed chunk is Chunk 9, design only: inspect the actual command and
+measured-position interfaces, then explain waypoint tolerances, stale-position
+handling, command ownership with reactive avoidance, and requirements for the
+connection from measured start to the first waypoint and physical testing.
+Review that purpose before beginning. No implementation, radio, or flight
+commands are authorized by that design proposal. Stop here for 8B review.
