@@ -1,21 +1,19 @@
-# Development tools only. Board-specific toolchains and mission dependencies
-# are added after hardware/repository inspection.
-FROM python:3.12-slim-bookworm
+# Same Python and packages on every computer (Mac, Windows, Linux).
+FROM python:3.10-slim-bookworm
+
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       build-essential \
-       cmake \
-       ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /workspace
 
-# .dockerignore excludes prompts, credentials, Git internals and generated data.
-# This is a snapshot: rebuild after editing host files.
-COPY . /workspace
+# Install dependencies from the lock file first so rebuilds are fast.
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen --no-install-project
+
+COPY . .
 
 CMD ["sleep", "infinity"]

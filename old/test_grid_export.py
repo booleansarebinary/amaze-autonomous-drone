@@ -12,9 +12,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from algorithms.grid_demo import main
-from algorithms.grid_export import save_plan
-from algorithms.grid_navigation import Grid
+from old.grid_demo import main
+from old.grid_export import save_plan
+from old.grid_navigation import Grid
 
 
 class GridExportTests(unittest.TestCase):
@@ -27,12 +27,23 @@ class GridExportTests(unittest.TestCase):
 
     def run_cli(self, data, start=(0, 0), goal=(2, 0), extra=(), process=False):
         self.map_path.write_text(json.dumps(data), encoding="utf-8")
-        arguments = [str(self.map_path), "--start", *map(str, start), "--goal", *map(str, goal),
-                     "--export", str(self.destination), *extra]
+        arguments = [
+            str(self.map_path),
+            "--start",
+            *map(str, start),
+            "--goal",
+            *map(str, goal),
+            "--export",
+            str(self.destination),
+            *extra,
+        ]
         if process:
             result = subprocess.run(
                 [sys.executable, "-B", "-m", "algorithms.grid_demo", *arguments],
-                cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=10,
+                cwd=Path(__file__).resolve().parents[1],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return result.returncode, result.stdout, result.stderr
         output, errors = StringIO(), StringIO()
@@ -44,7 +55,9 @@ class GridExportTests(unittest.TestCase):
         return code, output.getvalue(), errors.getvalue()
 
     def read_plan(self):
-        self.assertTrue(self.destination.is_file(), "CLI must write the requested JSON file")
+        self.assertTrue(
+            self.destination.is_file(), "CLI must write the requested JSON file"
+        )
         return json.loads(self.destination.read_text(encoding="utf-8"))
 
     def test_real_cli_exports_detour_as_planned_grid_data(self):
@@ -63,7 +76,10 @@ class GridExportTests(unittest.TestCase):
         self.assertEqual((plan["start"], plan["goal"]), ([0, 0], [2, 0]))
         self.assertEqual(plan["map"], {"width": 3, "height": 2, "blocked": [[1, 0]]})
         self.assertEqual(plan["planning_blocked"], [[1, 0]])
-        self.assertEqual(plan["movement"], {"directions": 4, "step_cost": 1, "heuristic": "manhattan"})
+        self.assertEqual(
+            plan["movement"],
+            {"directions": 4, "step_cost": 1, "heuristic": "manhattan"},
+        )
         self.assertEqual(plan["coordinates"]["units"], "cells")
         self.assertEqual(plan["coordinates"]["order"], "x,y")
         self.assertIsNone(plan["coordinates"]["cell_size_m"])
@@ -85,12 +101,23 @@ class GridExportTests(unittest.TestCase):
         code, _, _ = self.run_cli({"width": 1, "height": 1}, goal=(0, 0))
         self.assertEqual(code, 0)
         plan = self.read_plan()
-        self.assertEqual((plan["status"], plan["route"], plan["steps"]), ("route_found", [[0, 0]], 0))
+        self.assertEqual(
+            (plan["status"], plan["route"], plan["steps"]), ("route_found", [[0, 0]], 0)
+        )
 
     def test_clearance_configuration_and_planning_map_are_preserved(self):
         code, _, errors = self.run_cli(
-            {"width": 7, "height": 5}, (1, 2), (5, 2),
-            ["--cell-size-m", "0.25", "--footprint-radius-m", "0.1", "--margin-m", "0.05"],
+            {"width": 7, "height": 5},
+            (1, 2),
+            (5, 2),
+            [
+                "--cell-size-m",
+                "0.25",
+                "--footprint-radius-m",
+                "0.1",
+                "--margin-m",
+                "0.05",
+            ],
         )
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
@@ -100,7 +127,10 @@ class GridExportTests(unittest.TestCase):
         self.assertNotIn([1, 2], plan["planning_blocked"])
         self.assertEqual(plan["coordinates"]["cell_size_m"], 0.25)
         self.assertEqual(plan["coordinates"]["origin_m"], [0.0, 0.0])
-        self.assertEqual(plan["clearance"], {"enabled": True, "footprint_radius_m": 0.1, "margin_m": 0.05})
+        self.assertEqual(
+            plan["clearance"],
+            {"enabled": True, "footprint_radius_m": 0.1, "margin_m": 0.05},
+        )
         self.assertEqual(plan["steps"], 4)
 
     def test_export_works_without_importing_matplotlib(self):
@@ -149,7 +179,15 @@ class GridExportTests(unittest.TestCase):
     def test_nonfinite_values_are_rejected_before_creating_a_file(self):
         grid = Grid(1, 1)
         with self.assertRaises(ValueError):
-            save_plan(self.destination, grid, grid, (0, 0), (0, 0), [(0, 0)], cell_size_m=math.nan)
+            save_plan(
+                self.destination,
+                grid,
+                grid,
+                (0, 0),
+                (0, 0),
+                [(0, 0)],
+                cell_size_m=math.nan,
+            )
         self.assertFalse(self.destination.exists())
 
     def test_same_plan_produces_deterministic_json(self):
@@ -163,7 +201,9 @@ class GridExportTests(unittest.TestCase):
         self.assertEqual(self.destination.read_bytes(), other.read_bytes())
         self.assertEqual(self.read_plan()["map"]["blocked"], [[1, 1], [2, 1]])
 
-    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed")
+    @unittest.skipUnless(
+        importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed"
+    )
     def test_plot_and_export_can_be_requested_together(self):
         picture = self.directory / "plan.png"
         code, output, errors = self.run_cli(

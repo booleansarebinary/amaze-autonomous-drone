@@ -1,6 +1,13 @@
 services:
   drone-app:
     build: .
-    # If your application opens a web server/API, map the port here:
-    # ports:
-    #   - "8080:8080" 
+    working_dir: /workspace
+    init: true
+    # Your local folder is shared with the container, so code edits show up immediately.
+    volumes:
+      - .:/workspace
+    # Linux: uncomment to let the container use the Crazyradio.
+    # Windows/Mac: the container needs USB/IP set up first (usbipd-win on Windows);
+    # simpler to fly from the host with `uv run python -m algorithms.fly_route`.
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb

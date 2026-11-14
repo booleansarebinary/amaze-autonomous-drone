@@ -5,11 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles
-from algorithms.grid_plot import route_figure, save_route_plot
+from old.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles
+from old.grid_plot import route_figure, save_route_plot
 
 
-@unittest.skipUnless(importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed")
+@unittest.skipUnless(
+    importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed"
+)
 class GridPlotTests(unittest.TestCase):
     def test_detour_uses_cell_coordinates_and_shows_obstacle_area(self):
         grid = Grid(3, 2, blocked={(1, 0)})
@@ -20,7 +22,9 @@ class GridPlotTests(unittest.TestCase):
         self.assertIn("Planned route (offline)", axes.get_title())
         self.assertIn("cells", axes.get_xlabel())
         self.assertIn("cells", axes.get_ylabel())
-        route_line = next(line for line in axes.lines if line.get_label() == "Planned route")
+        route_line = next(
+            line for line in axes.lines if line.get_label() == "Planned route"
+        )
         self.assertEqual(list(route_line.get_xdata()), [0, 0, 1, 2, 2])
         self.assertEqual(list(route_line.get_ydata()), [0, 1, 1, 1, 0])
         obstacle = axes.patches[0]
@@ -40,8 +44,14 @@ class GridPlotTests(unittest.TestCase):
         self.assertIn("Obstacle", labels)
         self.assertIn("Clearance exclusion", labels)
         self.assertEqual(len(axes.patches), len(planning.blocked))
-        obstacle = next(patch for patch in axes.patches if patch.get_label() == "Obstacle")
-        excluded = next(patch for patch in axes.patches if patch.get_label() == "Clearance exclusion")
+        obstacle = next(
+            patch for patch in axes.patches if patch.get_label() == "Obstacle"
+        )
+        excluded = next(
+            patch
+            for patch in axes.patches
+            if patch.get_label() == "Clearance exclusion"
+        )
         self.assertNotEqual(obstacle.get_facecolor(), excluded.get_facecolor())
 
     def test_unreachable_map_keeps_endpoints_without_a_route_line(self):
@@ -51,8 +61,12 @@ class GridPlotTests(unittest.TestCase):
         self.addCleanup(figure.clear)
         axes = figure.axes[0]
         self.assertIn("No route", axes.get_title())
-        self.assertFalse(any(line.get_label() == "Planned route" for line in axes.lines))
-        markers = {item.get_label(): item.get_offsets().tolist() for item in axes.collections}
+        self.assertFalse(
+            any(line.get_label() == "Planned route" for line in axes.lines)
+        )
+        markers = {
+            item.get_label(): item.get_offsets().tolist() for item in axes.collections
+        }
         self.assertEqual(markers["Start"], [[0, 0]])
         self.assertEqual(markers["Goal"], [[2, 0]])
 
@@ -62,7 +76,9 @@ class GridPlotTests(unittest.TestCase):
             destination = Path(directory) / "existing.png"
             destination.write_bytes(b"existing work")
             with self.assertRaises(FileExistsError):
-                save_route_plot(destination, grid, grid, (0, 0), (1, 1), [(0, 0), (1, 0), (1, 1)])
+                save_route_plot(
+                    destination, grid, grid, (0, 0), (1, 1), [(0, 0), (1, 0), (1, 1)]
+                )
             self.assertEqual(destination.read_bytes(), b"existing work")
 
 
