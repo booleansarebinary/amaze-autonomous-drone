@@ -1354,3 +1354,223 @@ inspect any existing mission-controller code again, then review a simple
 supplied-order policy, explicit unreachable/no-target outcomes, and what
 counts as a completed visit. No hidden identity or hardware event is needed
 for candidate routing. Stop here for review; commit/push need explicit approval.
+
+Subsequent Git outcomes: after approval, 7B was committed as `ebb0b2b`
+(`Save optional pictures of planned grid routes`) and 7C as `4811b39`
+(`Export planned grid routes and settings as JSON`). Each was pushed
+separately to `origin/MAIN_collect_the_astrophage`, one new commit per push.
+The preserved 7B snapshot passed 64 tests in isolation before staging.
+Direct staging encountered a temporary-file read permission error; an
+index-only patch was checked and used instead, preserving working files.
+The temporary patch was removed before committing. The preceding status
+records the original 7C review, not the later approved commits.
+
+## Chunk 8A: supplied-order candidate visits — PASS
+
+### Purpose, inspection, and changes
+
+The candidate selection/confirmation purpose was reviewed and authorized.
+Work was interrupted by the user's exit request after writing tests and an
+empty policy skeleton. The subsequent resume continued from that exact state.
+
+Before choosing the implementation, current mission/design documents and
+existing code were inspected again. They specify a future mission controller,
+but the mission branch has no implemented candidate controller. Searches
+through cached branches found only the older backup's mission data,
+configuration, logging, and frame foundations. Its data types/configuration
+were read; they provide no reusable candidate-selection controller. No old
+branch was restored or historical physical assumptions imported.
+
+- `algorithms/candidate_visits.py`: adds frozen `CandidatePlan` and the small
+  `CandidateVisits` policy, using the existing `Grid` and `astar` unchanged.
+- `algorithms/test_candidate_visits.py`: ten focused behavior tests.
+- This record documents decisions, executed results, and remaining scope.
+
+### How it works
+
+Construction validates supplied candidate cells against the supplied grid,
+snapshots their order, and treats repeated coordinates as one location using
+their first occurrence. No target identity, color, sensor data, or real/fake
+flag is accepted or used to choose routes. A previously clearance-adjusted
+grid can be supplied directly; no second planner or map format is added.
+
+`plan_next(current)` validates the supplied current cell, tries unvisited
+locations in supplied order, and calls A* for each until one is reachable.
+It returns that target, the route including both endpoints, and any earlier
+unreachable candidates tried during this call. The route and result are
+immutable snapshots. The policy is supplied-order, not nearest-first.
+
+Planning does not mark a visit, even when current already equals the target.
+`confirm_visit(current)` accepts an explicit offline arrival assertion only
+when the cell matches the most recently selected candidate. It then records
+that location as visited and clears the pending selection. Confirmation
+without selection, for another location, or repeated confirmation raises
+`ValueError` without adding a visit. The public `visited` property returns
+an immutable snapshot, so callers cannot alter tracking through that value.
+
+Unreachable candidates are reported but not marked visited or permanently
+blacklisted. A later call checks them again from its supplied position.
+Supplying a position across a disconnected component is an offline input,
+not evidence that the drone traversed the barrier. Later route selection
+replaces the pending selection; confirmation always matches the latest one.
+
+| Result status | Meaning |
+|---|---|
+| `target_selected` | A route to the first reachable unvisited location is supplied |
+| `no_targets` | The supplied candidate list was empty |
+| `all_visited` | Every supplied distinct location was explicitly confirmed |
+| `all_unreachable` | Unvisited locations remain but none has a route from the supplied current cell |
+
+Terminal selection results have no target or route. `unreachable` lists
+only candidates tried during the current call; candidates after a selected
+target have not yet been checked. Blocked/out-of-bounds/malformed candidate
+or current cells are invalid inputs (`ValueError`), distinct from valid
+free candidates that cannot be reached.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Follow supplied order rather than nearest distance | PASS | Farther first candidate selected before nearer second candidate |
+| Reuse obstacle-aware A* on the supplied grid | PASS | Returned endpoints/length and ten-step clearance detour checked |
+| Planning never confirms a visit | PASS | Visited remains empty before confirmation, including a one-cell route |
+| Confirmed locations are skipped | PASS | Next selection changes after confirmation; all-visited status after both |
+| Confirmation matches the latest selected cell | PASS | Unrequested, wrong-cell, outside, and duplicate confirmations rejected |
+| Handle/report unreachable candidates without fake visits | PASS | Wall-separated first target reported; reachable second selected; unreachable target remains unvisited |
+| Distinguish empty/all-visited/all-unreachable outcomes | PASS | Separate status assertions and absent target/route |
+| Preserve candidate inputs and treat duplicate cells once | PASS | Later caller list changes have no effect; repeated location is not revisited |
+| Recheck reachability from a new supplied position | PASS | Previously unreachable target becomes selectable from another valid supplied cell |
+| Keep hidden identity and hardware outside decisions | PASS | API accepts only grid/cells; no sensor/radio/flight interface |
+
+### Test-first commands and actual results
+
+The tests preceded implementation. The empty skeleton always returned
+`no_targets`, recorded no confirmations, and performed no validation.
+The following exact command was run before the interruption and again on
+resume before replacing the skeleton:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_candidate_visits -q
+```
+
+Red result: exit 1; ten methods, 15 behavioral assertion failures including
+subtests, zero errors/skips. Replacing the skeleton with the supplied-order
+policy resolved those expected missing-behavior failures.
+
+Exact full-suite commands from the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
+$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
+& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
+```
+
+- Without Matplotlib: exit 0, 78 passed, six optional image tests skipped,
+  zero failures/errors (84 methods total). Repeated after mutation checks.
+- With Matplotlib: exit 0, all 84 passed, zero failures/errors/skips.
+
+Both environments use Python 3.14.7. Existing independent route comparisons
+remain included. No new dependency, sensor, radio, or flight operation.
+
+### Controlled visited-tracking mutation
+
+The visited part of the Chunk 8 checkpoint was checked now; the return-route
+fault remains due in 8B, where return behavior will exist. Exact command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk8a_mutation_check.py
+```
+
+The actual candidate module, grid module, and unchanged candidate tests were
+copied into an isolated temporary package with no hardware adapters.
+Baseline: all ten candidate methods passed. A single deliberate fault
+changed the visited check to `if False and candidate in self._visited`,
+preventing confirmed locations from being skipped.
+
+Expected detecting test:
+`test_only_confirmed_visits_are_skipped_and_completion_is_explicit`.
+Actual result: it failed because `(1, 0)` was selected again instead of
+the next candidate `(3, 0)`. The duplicate-location test and the unreachable
+outcome test also failed. Mutant result: exit 1, three assertion failures,
+zero errors/skips; no syntax/import/infrastructure failure counted as coverage.
+No mutant survived, so no coverage repair was needed.
+
+The correct copied source was restored and all ten candidate tests passed
+again. Copied tests remained byte-for-byte unchanged, and SHA-256 checks
+confirmed all workspace source/tests were untouched by the driver. Cleanup
+was restricted to the verified system temporary root and confirmed complete.
+Driver exit: 0. The normal full worktree suite then passed as recorded above.
+No deliberate fault or mutation driver is part of the proposed commit.
+
+### Executed worked example
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.candidate_visits import CandidateVisits; from algorithms.grid_navigation import Grid; visits = CandidateVisits(Grid(5, 3, {(2, y) for y in range(3)}), [(4, 1), (1, 1)]); print('first plan:', visits.plan_next((0, 1))); print('visited before confirmation:', sorted(visits.visited)); visits.confirm_visit((1, 1)); print('visited after confirmation:', sorted(visits.visited)); print('next plan:', visits.plan_next((1, 1)))"
+```
+
+Actual output, exit 0:
+
+```text
+first plan: CandidatePlan(status='target_selected', target=(1, 1), route=((0, 1), (1, 1)), unreachable=((4, 1),))
+visited before confirmation: []
+visited after confirmation: [(1, 1)]
+next plan: CandidatePlan(status='all_unreachable', target=None, route=None, unreachable=((4, 1),))
+```
+
+The wall occupies all cells at x=2. Candidate `(4, 1)` cannot be reached
+from the left component, so `(1, 1)` is selected next. Only the explicit
+confirmation adds it to visited. The remaining target is reported as
+unreachable rather than presenting the visit sequence as successful collection.
+
+### Limitations, Git state, and next proposal
+
+This is an offline Python policy, not a complete mission controller. No
+new CLI, sensor event, collection dwell, return planning, or flight command
+was added. A confirmation trusts the supplied cell assertion; it does not
+validate measured pose, freshness, tolerances, or actual arrival. The caller
+must supply the intended static/clearance-adjusted map. Replanning may repeat
+A* calls for unreachable candidates; no reachability cache is introduced.
+Fixed-altitude suitability, map/frame alignment, localization, physical
+clearance, tracking, and the actual-start-to-route connection remain unvalidated.
+Offline tests do not establish physical flight readiness.
+
+7B and 7C were committed and pushed separately as approved before this chunk.
+Chunk 8A changes only the new policy module, its tests, and this progress
+record. They remain unstaged/uncommitted; no 8A commit or push was made.
+Existing README modifications and deletions of `docs/architecture.md`,
+`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch is
+`astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`, with
+no outgoing commits against the cached upstream. Whitespace checks cover
+tracked changes and both new files. Temporary test/mutation artifacts remain
+outside Git.
+
+Next proposed purpose: Chunk 8B will accept a simulated external detection
+event, stop selecting further candidates, and use existing A* to plan home
+from the supplied current cell. An obstructed/unreachable home route must be
+reported explicitly. Review event/return behavior before implementation,
+then test an obstacle-crossing return fault to complete the Chunk 8 checkpoint.
+Stop here for review; commit/push require separate explicit approval.
+
+### Approved 8A integration with newer remote history
+
+Before the approved commit/push, fetching origin revealed incoming commit
+`07d2a57` (`working simple astrophage collection script`). It moved the tested
+navigation modules and mission documents into `old/`, changed their imports,
+and added a separate collection/flight script. The commit gives no explanation
+for archiving the navigation work. The user explicitly chose to retain the
+offline modules under `algorithms/`.
+
+The local branch fast-forwarded to that incoming commit without rewriting
+history. Navigation modules/tests were returned to `algorithms/`, with their
+original imports and formatting; the four navigation/mission documents were
+returned to `docs/`. Unrelated archived files remain in `old/`. The incoming
+collection script, Docker changes, and already-tracked cache files are retained
+unchanged; no cache files or flight changes are added by this commit. Inspection
+found that script has its own planner and sends flight commands unless dry-run
+is selected. It was not executed or connected to this offline policy.
+
+Existing edits were saved in a local stash and an external temporary snapshot
+before fast-forwarding, then restored and checked byte for byte. The local
+stash is retained as a backup. README edits and the three document deletions
+remain outside the proposed commit. This reconciliation broadens 8A's file
+list only to preserve the explicitly requested active navigation layout.

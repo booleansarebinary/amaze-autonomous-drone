@@ -1,41 +1,30 @@
 """Command-line navigation checks without sensors, radio, or a drone."""
 
-import importlib.util
-import json
-import subprocess
-import sys
-import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
+import unittest
 from unittest.mock import patch
 
-from old.grid_demo import main
+from algorithms.grid_demo import main
 
 
 class GridDemoTests(unittest.TestCase):
     def run_demo(self, data, start=(0, 0), goal=(2, 0), extra=(), process=False):
         with TemporaryDirectory(prefix="astrophage-demo-test-") as directory:
             map_path = Path(directory) / "map.json"
-            map_path.write_text(
-                data if isinstance(data, str) else json.dumps(data), encoding="utf-8"
-            )
-            arguments = [
-                str(map_path),
-                "--start",
-                *map(str, start),
-                "--goal",
-                *map(str, goal),
-                *extra,
-            ]
+            map_path.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
+            arguments = [str(map_path), "--start", *map(str, start), "--goal", *map(str, goal), *extra]
             if process:
                 result = subprocess.run(
                     [sys.executable, "-B", "-m", "algorithms.grid_demo", *arguments],
                     cwd=Path(__file__).resolve().parents[1],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
+                    capture_output=True, text=True, timeout=10,
                 )
                 return result.returncode, result.stdout, result.stderr
             output, errors = StringIO(), StringIO()
@@ -85,10 +74,7 @@ class GridDemoTests(unittest.TestCase):
 
     def test_invalid_maps_are_reported_without_tracebacks(self):
         for data in [
-            "{",
-            [],
-            {"height": 2},
-            {"width": True, "height": 2},
+            "{", [], {"height": 2}, {"width": True, "height": 2},
             {"width": 3, "height": 2, "blocked": "1,0"},
             {"width": 3, "height": 2, "blocked": [[1]]},
             {"width": 3, "height": 2, "blocked": [[[0], 0]]},
@@ -112,19 +98,9 @@ class GridDemoTests(unittest.TestCase):
                 self.assertIn("error:", errors)
 
     def test_supplied_clearance_reuses_existing_inflation(self):
-        data = {
-            "width": 11,
-            "height": 7,
-            "blocked": [[x, y] for x in range(3, 8) for y in (2, 4)],
-        }
-        flags = [
-            "--cell-size-m",
-            "0.25",
-            "--footprint-radius-m",
-            "0.1",
-            "--margin-m",
-            "0.05",
-        ]
+        data = {"width": 11, "height": 7,
+                "blocked": [[x, y] for x in range(3, 8) for y in (2, 4)]}
+        flags = ["--cell-size-m", "0.25", "--footprint-radius-m", "0.1", "--margin-m", "0.05"]
         code, output, errors = self.run_demo(data, (1, 3), (9, 3), flags)
         self.assertEqual(code, 1)
         self.assertEqual(errors, "")
@@ -186,9 +162,7 @@ class GridDemoTests(unittest.TestCase):
             self.assertIn("requirements-grid-plot.txt", errors)
             self.assertFalse(destination.exists())
 
-    @unittest.skipUnless(
-        importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed"
-    )
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "optional Matplotlib not installed")
     def test_plot_option_saves_real_pngs_without_changing_route_exit_codes(self):
         from PIL import Image
 
@@ -198,8 +172,7 @@ class GridDemoTests(unittest.TestCase):
                     destination = Path(directory) / f"route-{expected_code}.png"
                     code, output, errors = self.run_demo(
                         {"width": 3, "height": 2, "blocked": blocked},
-                        extra=["--plot", str(destination)],
-                        process=True,
+                        extra=["--plot", str(destination)], process=True,
                     )
                     self.assertEqual(code, expected_code)
                     self.assertEqual(errors, "")

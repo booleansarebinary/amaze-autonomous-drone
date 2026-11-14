@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from old.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles
+from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles
 
 
 def load_grid(path: Path) -> Grid:
@@ -18,17 +18,13 @@ def load_grid(path: Path) -> Grid:
         raise ValueError("map requires width and height; only blocked is optional")
     blocked = data.get("blocked", [])
     if not isinstance(blocked, list) or any(
-        not isinstance(cell, list)
-        or len(cell) != 2
-        or any(type(value) is not int for value in cell)
-        for cell in blocked
+        not isinstance(cell, list) or len(cell) != 2
+        or any(type(value) is not int for value in cell) for cell in blocked
     ):
         raise ValueError("blocked must be a list of integer [x, y] pairs")
     # JSON arrays become tuples at the existing grid boundary; Grid validates
     # integer coordinates, dimensions, and obstacle bounds.
-    return Grid(
-        data["width"], data["height"], frozenset(tuple(cell) for cell in blocked)
-    )
+    return Grid(data["width"], data["height"], frozenset(tuple(cell) for cell in blocked))
 
 
 def render_grid(grid: Grid, start, goal, route) -> str:
@@ -56,20 +52,14 @@ def render_grid(grid: Grid, start, goal, route) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "map", type=Path, help="JSON map with width, height, and blocked cells"
-    )
+    parser.add_argument("map", type=Path, help="JSON map with width, height, and blocked cells")
     parser.add_argument("--start", type=int, nargs=2, required=True, metavar=("X", "Y"))
     parser.add_argument("--goal", type=int, nargs=2, required=True, metavar=("X", "Y"))
     parser.add_argument("--cell-size-m", type=float, help="square cell size in meters")
-    parser.add_argument(
-        "--footprint-radius-m", type=float, help="provisional enclosing radius"
-    )
+    parser.add_argument("--footprint-radius-m", type=float, help="provisional enclosing radius")
     parser.add_argument("--margin-m", type=float, help="provisional extra clearance")
     parser.add_argument("--plot", type=Path, help="save an optional PNG to a new file")
-    parser.add_argument(
-        "--export", type=Path, help="save the planned route and settings as new JSON"
-    )
+    parser.add_argument("--export", type=Path, help="save the planned route and settings as new JSON")
     args = parser.parse_args(argv)
     start, goal = tuple(args.start), tuple(args.goal)
     clearance_values = (args.cell_size_m, args.footprint_radius_m, args.margin_m)
@@ -84,33 +74,21 @@ def main(argv=None) -> int:
         original_grid = grid
         if clearance_enabled:
             if any(value is None for value in clearance_values):
-                raise ValueError(
-                    "cell size, footprint radius, and margin must be supplied together"
-                )
+                raise ValueError("cell size, footprint radius, and margin must be supplied together")
             grid = inflate_obstacles(
-                GridCoordinates(grid, args.cell_size_m),
-                args.footprint_radius_m,
-                args.margin_m,
+                GridCoordinates(grid, args.cell_size_m), args.footprint_radius_m, args.margin_m
             )
         route = astar(grid, start, goal)
         if args.plot is not None:
             if args.plot.resolve() == args.map.resolve():
                 raise ValueError("plot output must differ from the input map")
-            from old.grid_plot import save_route_plot
-
+            from algorithms.grid_plot import save_route_plot
             save_route_plot(args.plot, original_grid, grid, start, goal, route)
         if args.export is not None:
-            from old.grid_export import save_plan
-
+            from algorithms.grid_export import save_plan
             save_plan(
-                args.export,
-                original_grid,
-                grid,
-                start,
-                goal,
-                route,
-                cell_size_m=args.cell_size_m,
-                footprint_radius_m=args.footprint_radius_m,
+                args.export, original_grid, grid, start, goal, route,
+                cell_size_m=args.cell_size_m, footprint_radius_m=args.footprint_radius_m,
                 margin_m=args.margin_m,
             )
     except (OSError, ValueError, RuntimeError) as exc:
@@ -119,9 +97,7 @@ def main(argv=None) -> int:
     print("Planned route (offline)")
     print("Grid cells: x right, y up; (0, 0) at lower left.")
     if clearance_enabled:
-        print(
-            f"Clearance: radius {args.footprint_radius_m:g} m + margin {args.margin_m:g} m."
-        )
+        print(f"Clearance: radius {args.footprint_radius_m:g} m + margin {args.margin_m:g} m.")
     else:
         print("Clearance: not applied (point grid).")
     print("S=start, G=goal, B=start and goal, *=route, #=blocked, .=free")

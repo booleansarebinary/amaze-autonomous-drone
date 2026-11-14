@@ -4,8 +4,8 @@ import math
 import unittest
 from collections import deque
 
-from old import grid_navigation
-from old.grid_navigation import Grid
+from algorithms import grid_navigation
+from algorithms.grid_navigation import Grid
 
 
 def breadth_first_steps(width, height, blocked, start, goal):
@@ -121,9 +121,7 @@ class ManhattanDistanceTests(unittest.TestCase):
             ((-2, 3), (1, -1), 7),
         ]:
             with self.subTest(start=start, goal=goal):
-                self.assertEqual(
-                    grid_navigation.manhattan_distance(start, goal), expected
-                )
+                self.assertEqual(grid_navigation.manhattan_distance(start, goal), expected)
 
     def test_malformed_endpoint_is_rejected(self):
         for invalid in [(1.5, 2), (True, 2), (1,), [1, 2], None]:
@@ -165,29 +163,11 @@ class AstarTests(unittest.TestCase):
     def test_later_cheaper_route_replaces_an_earlier_discovery(self):
         # This layout needs a cheaper arrival at (4, 3): 9 steps instead of 11.
         # Keeping the first discovery produces a 19-step route to the goal.
-        grid = Grid(
-            8,
-            7,
-            blocked={
-                (0, 6),
-                (1, 0),
-                (1, 1),
-                (1, 2),
-                (1, 3),
-                (1, 5),
-                (1, 6),
-                (2, 6),
-                (3, 4),
-                (4, 0),
-                (5, 3),
-                (5, 4),
-                (5, 6),
-                (6, 1),
-                (6, 4),
-                (6, 5),
-                (7, 0),
-            },
-        )
+        grid = Grid(8, 7, blocked={
+            (0, 6), (1, 0), (1, 1), (1, 2), (1, 3), (1, 5), (1, 6),
+            (2, 6), (3, 4), (4, 0), (5, 3), (5, 4), (5, 6),
+            (6, 1), (6, 4), (6, 5), (7, 0),
+        })
         route = grid_navigation.astar(grid, (0, 0), (7, 6))
         self.assert_valid_route(grid, route, (0, 0), (7, 6), steps=17)
 
@@ -208,10 +188,8 @@ class AstarTests(unittest.TestCase):
     def test_blocked_and_out_of_bounds_endpoints_are_invalid(self):
         grid = Grid(3, 2, blocked={(1, 0)})
         for start, goal in [
-            ((1, 0), (2, 0)),
-            ((0, 0), (1, 0)),
-            ((-1, 0), (2, 0)),
-            ((0, 0), (3, 0)),
+            ((1, 0), (2, 0)), ((0, 0), (1, 0)),
+            ((-1, 0), (2, 0)), ((0, 0), (3, 0)),
         ]:
             with self.subTest(start=start, goal=goal):
                 with self.assertRaises(ValueError):
@@ -263,19 +241,9 @@ class AstarTests(unittest.TestCase):
     def test_each_endpoint_rejects_all_map_boundaries_and_malformed_cells(self):
         grid = Grid(4, 2)
         invalid_cells = [
-            (-1, 0),
-            (4, 0),
-            (0, -1),
-            (0, 2),
-            (1.0, 0),
-            (True, 0),
-            (float("nan"), 0),
-            (0, float("inf")),
-            (0,),
-            (0, 0, 0),
-            [0, 0],
-            "00",
-            None,
+            (-1, 0), (4, 0), (0, -1), (0, 2), (1.0, 0), (True, 0),
+            (float("nan"), 0), (0, float("inf")), (0,), (0, 0, 0),
+            [0, 0], "00", None,
         ]
         for invalid in invalid_cells:
             for start, goal in [(invalid, (0, 0)), ((0, 0), invalid)]:
@@ -287,25 +255,18 @@ class AstarTests(unittest.TestCase):
         for width, height in [(3, 3), (4, 2), (2, 4)]:
             first, last = (0, 0), (width - 1, height - 1)
             optional_obstacles = [
-                (x, y)
-                for x in range(width)
-                for y in range(height)
+                (x, y) for x in range(width) for y in range(height)
                 if (x, y) not in (first, last)
             ]
             for mask in range(1 << len(optional_obstacles)):
                 blocked = {
-                    cell
-                    for index, cell in enumerate(optional_obstacles)
+                    cell for index, cell in enumerate(optional_obstacles)
                     if mask & (1 << index)
                 }
                 grid = Grid(width, height, blocked)
                 for start, goal in [(first, last), (last, first)]:
-                    with self.subTest(
-                        width=width, height=height, mask=mask, start=start
-                    ):
-                        expected = breadth_first_steps(
-                            width, height, blocked, start, goal
-                        )
+                    with self.subTest(width=width, height=height, mask=mask, start=start):
+                        expected = breadth_first_steps(width, height, blocked, start, goal)
                         route = grid_navigation.astar(grid, start, goal)
                         if expected is None:
                             self.assertIsNone(route)
@@ -326,18 +287,15 @@ class GridCoordinatesTests(unittest.TestCase):
     def test_world_points_use_the_containing_cell_including_negative_positions(self):
         coordinates = self.coordinates()
         for point, cell in [
-            ((-0.9, -0.4), (0, 0)),
-            ((-0.1, -0.2), (1, 0)),
-            ((0.2, 0.2), (2, 1)),
-            ((0.9, 0.4), (3, 1)),
+            ((-0.9, -0.4), (0, 0)), ((-0.1, -0.2), (1, 0)),
+            ((0.2, 0.2), (2, 1)), ((0.9, 0.4), (3, 1)),
         ]:
             with self.subTest(point=point):
                 self.assertEqual(coordinates.world_to_cell(point), cell)
 
     def test_cell_centers_round_trip_for_rectangular_maps(self):
         for width, height, size, origin in [
-            (4, 2, 0.5, (-1.0, -0.5)),
-            (2, 4, 0.25, (1.0, -2.0)),
+            (4, 2, 0.5, (-1.0, -0.5)), (2, 4, 0.25, (1.0, -2.0)),
         ]:
             coordinates = self.coordinates(Grid(width, height), size, origin)
             for x in range(width):
@@ -365,8 +323,7 @@ class GridCoordinatesTests(unittest.TestCase):
             coordinates.world_to_cell((0.25, math.nextafter(0.5, -math.inf))), (2, 1)
         )
         for point in [
-            (1.0, 0.0),
-            (0.0, 0.5),
+            (1.0, 0.0), (0.0, 0.5),
             (math.nextafter(-1.0, -math.inf), 0.0),
             (0.0, math.nextafter(-0.5, -math.inf)),
         ]:
@@ -405,15 +362,7 @@ class GridCoordinatesTests(unittest.TestCase):
             with self.subTest(cell=cell):
                 with self.assertRaises(ValueError):
                     coordinates.cell_center(cell)
-        for point in [
-            (math.nan, 0),
-            (0, math.inf),
-            (False, 0),
-            ("0", 0),
-            (0,),
-            [0, 0],
-            None,
-        ]:
+        for point in [(math.nan, 0), (0, math.inf), (False, 0), ("0", 0), (0,), [0, 0], None]:
             with self.subTest(point=point):
                 with self.assertRaises(ValueError):
                     coordinates.world_to_cell(point)
@@ -487,9 +436,7 @@ class ClearanceTests(unittest.TestCase):
             (Grid(15, 11), (3, 5)),
         ]:
             with self.subTest(blocked=grid.blocked, cell=cell):
-                self.assertIn(
-                    cell, self.inflate(grid, radius=0.3, margin=0, size=0.1).blocked
-                )
+                self.assertIn(cell, self.inflate(grid, radius=0.3, margin=0, size=0.1).blocked)
 
     def test_cell_size_changes_physical_clearance_and_origin_does_not(self):
         grid = Grid(11, 9, blocked={(4, 3)})
