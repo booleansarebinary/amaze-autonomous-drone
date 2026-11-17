@@ -35,48 +35,51 @@ from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.crazyflie.log import LogConfig
 from cflib.utils import uri_helper
+from cflib.utils.power_switch import PowerSwitch
+
+from orbit import reset_estimator  # same estimator setup that works in orbit.py
 
 # ---------------------------------------------------------------------
 # CONFIG - edit these for your setup
 # ---------------------------------------------------------------------
-URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
+URI = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E7E7")
 
-FLIGHT_HEIGHT = 0.4        # meters, altitude above ground
-DESIRED_STANDOFF = 0.5     # meters, target orbit distance from object
-MAX_SENSOR_RANGE = 2.0     # meters, ignore readings beyond this (no detection)
-MIN_SENSOR_RANGE = 0.05    # meters, ignore obviously invalid near-zero readings
+FLIGHT_HEIGHT = 0.3  # meters, altitude above ground
+DESIRED_STANDOFF = 0.5  # meters, target orbit distance from object
+MAX_SENSOR_RANGE = 2.0  # meters, ignore readings beyond this (no detection)
+MIN_SENSOR_RANGE = 0.05  # meters, ignore obviously invalid near-zero readings
 
-K_RADIAL = 0.8             # proportional gain, distance error -> radial speed
-ORBIT_SPEED = 0.15         # m/s, constant tangential (circling) speed
-MAX_SPEED = 0.3            # m/s, safety cap on total commanded speed
-SEARCH_YAW_RATE = 30       # deg/s, spin rate when no object is detected
-ORBIT_DURATION = 40.0      # seconds to orbit before landing
+K_RADIAL = 0.8  # proportional gain, distance error -> radial speed
+ORBIT_SPEED = 0.15  # m/s, constant tangential (circling) speed
+MAX_SPEED = 0.3  # m/s, safety cap on total commanded speed
+SEARCH_YAW_RATE = 30  # deg/s, spin rate when no object is detected
+ORBIT_DURATION = 40.0  # seconds to orbit before landing
 CONTROL_HZ = 10
 # ---------------------------------------------------------------------
 
 # Body-frame unit direction vectors for each sensor (x=forward, y=left)
 SENSOR_DIRECTIONS = {
-    'front': (1.0, 0.0),
-    'back': (-1.0, 0.0),
-    'left': (0.0, 1.0),
-    'right': (0.0, -1.0),
+    "front": (1.0, 0.0),
+    "back": (-1.0, 0.0),
+    "left": (0.0, 1.0),
+    "right": (0.0, -1.0),
 }
 
-_latest_ranges = {'front': None, 'back': None, 'left': None, 'right': None}
+_latest_ranges = {"front": None, "back": None, "left": None, "right": None}
 
 
 def _range_callback(timestamp, data, logconf):
     # Multi-ranger reports distances in millimeters; the controller uses meters.
-    for key in ('front', 'back', 'left', 'right'):
-        val = data.get(f'range.{key}')
+    for key in ("front", "back", "left", "right"):
+        val = data.get(f"range.{key}")
         if val is not None:
             _latest_ranges[key] = val / 1000.0
 
 
 def start_range_logging(scf):
-    log_config = LogConfig(name='Ranges', period_in_ms=int(1000 / CONTROL_HZ))
-    for key in ('front', 'back', 'left', 'right'):
-        log_config.add_variable(f'range.{key}', 'uint16_t')
+    log_config = LogConfig(name="Ranges", period_in_ms=int(1000 / CONTROL_HZ))
+    for key in ("front", "back", "left", "right"):
+        log_config.add_variable(f"range.{key}", "uint16_t")
     scf.cf.log.add_config(log_config)
     log_config.data_received_cb.add_callback(_range_callback)
     log_config.start()
@@ -90,7 +93,8 @@ def rotate90_ccw(x, y):
 def compute_velocity_command():
     """Reactive potential-field control: returns (vx, vy) in body frame."""
     valid = {
-        k: v for k, v in _latest_ranges.items()
+        k: v
+        for k, v in _latest_ranges.items()
         if v is not None and MIN_SENSOR_RANGE < v < MAX_SENSOR_RANGE
     }
     print(valid)
@@ -162,39 +166,85 @@ def run_orbit(cf, duration, hz=CONTROL_HZ):
         time.sleep(1.0 / hz)
 
 
+def recover_if_locked():
+    """Clear a crashed/locked supervisor left behind by a previous run.
+
+    If motors are cut while flying (Ctrl-C, watchdog timeout), the firmware
+    supervisor goes to 'locked' and refuses to fly again until the STM32 is
+    rebooted. Detect that and power-cycle it over the radio.
+    """
+    with SyncCrazyflie(URI, cf=Crazyflie(rw_cache="./cache")) as scf:
+        sup = scf.cf.supervisor
+        if sup.is_crashed:
+            print("Drone reports a crash -- sending crash recovery request.")
+            sup.send_crash_recovery_request()
+            time.sleep(0.5)
+        locked = sup.is_locked
+
+    if locked:
+        print("Drone is locked from the previous run -- rebooting it over the radio...")
+        PowerSwitch(URI).stm_power_cycle()
+        time.sleep(4.0)  # give the firmware time to boot and the decks to init
+
+
 def main():
     cflib.crtp.init_drivers()
 
-    with SyncCrazyflie(URI, cf=Crazyflie(rw_cache='./cache')) as scf:
+    recover_if_locked()
+
+    with SyncCrazyflie(URI, cf=Crazyflie(rw_cache="./cache")) as scf:
         cf = scf.cf
 
-        print('Starting range sensor logging...')
+        # Hover setpoints need a Flow deck to measure speed and height.
+        if cf.param.get_value("deck.bcFlow2") != "1":
+            print("No Flow deck detected -- the drone can't hover without it.")
+            return
+
+        # Selects the Kalman estimator and waits until it has converged.
+        print("Resetting estimator...")
+        reset_estimator(scf)
+
+        print("Starting range sensor logging...")
         log_config = start_range_logging(scf)
         time.sleep(0.5)  # let a few readings come in
 
+        arming = cf.supervisor
+        interrupted = False
         try:
-            cf.platform.send_arming_request(True)
+            arming.send_arming_request(True)
             time.sleep(1.0)
-        except Exception as e:
-            print(f'Arming request skipped/failed: {e}')
 
-        print('Taking off...')
-        takeoff(cf, FLIGHT_HEIGHT)
+            print("Taking off...")
+            takeoff(cf, FLIGHT_HEIGHT)
 
-        print('Searching for object and orbiting...')
-        run_orbit(cf, ORBIT_DURATION)
+            print("Searching for object and orbiting...")
+            run_orbit(cf, ORBIT_DURATION)
+        except KeyboardInterrupt:
+            # Don't cut motors in the air: the firmware treats that as an
+            # emergency and locks until reboot. Land first instead.
+            # (Press Ctrl-C again during landing to cut motors immediately.)
+            interrupted = True
+            print("\nCtrl-C -- landing (Ctrl-C again to cut motors)...")
+        finally:
+            try:
+                print("Landing...")
+                land(cf, FLIGHT_HEIGHT)
+            finally:
+                # Motors are on the ground now, so stopping won't lock the drone.
+                cf.commander.send_stop_setpoint()
+                time.sleep(0.1)
+                log_config.stop()
+                arming.send_arming_request(False)
+                time.sleep(0.1)  # let the disarm packet go out before disconnecting
 
-        print('Landing...')
-        land(cf, FLIGHT_HEIGHT)
-
-        cf.commander.send_stop_setpoint()
-        log_config.stop()
-        print('Done.')
+        if interrupted:
+            raise KeyboardInterrupt
+        print("Done.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print('\nEmergency stop triggered by user.')
+        print("\nEmergency stop triggered by user.")
         sys.exit(1)

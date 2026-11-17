@@ -27,18 +27,18 @@ from cflib.utils import uri_helper
 # ---------------------------------------------------------------------
 # CONFIG - edit these for your setup
 # ---------------------------------------------------------------------
-URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
+URI = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E7E7")
 
 # Coordinates of the stationary object, in your positioning system's frame (meters)
 OBJECT_X = 0.0
 OBJECT_Y = 0.0
 
-ORBIT_RADIUS = 0.5      # meters
-ORBIT_HEIGHT = 0.5      # meters (flight altitude)
-ORBIT_PERIOD = 8.0      # seconds for one full revolution
+ORBIT_RADIUS = 0.5  # meters
+ORBIT_HEIGHT = 0.3  # meters (flight altitude)
+ORBIT_PERIOD = 8.0  # seconds for one full revolution
 NUM_LAPS = 1
-SETPOINT_HZ = 10        # rate at which setpoints are streamed
-FACE_CENTER = True      # if True, the drone yaws to always face the object
+SETPOINT_HZ = 10  # rate at which setpoints are streamed
+FACE_CENTER = True  # if True, the drone yaws to always face the object
 # ---------------------------------------------------------------------
 
 
@@ -46,13 +46,15 @@ FACE_CENTER = True      # if True, the drone yaws to always face the object
 def position_samples(scf, variables, timeout):
     """Read telemetry with a deadline, including when no packets arrive."""
     samples = Queue()
-    log_config = LogConfig(name='Orbit Position', period_in_ms=200)
+    log_config = LogConfig(name="Orbit Position", period_in_ms=200)
     for variable in variables:
-        log_config.add_variable(variable, 'float')
+        log_config.add_variable(variable, "float")
     log_config.data_received_cb.add_callback(
-        lambda timestamp, data, config: samples.put(data))
+        lambda timestamp, data, config: samples.put(data)
+    )
     log_config.error_cb.add_callback(
-        lambda config, message: samples.put(RuntimeError(message)))
+        lambda config, message: samples.put(RuntimeError(message))
+    )
     scf.cf.log.add_config(log_config)
 
     def read_samples():
@@ -60,11 +62,11 @@ def position_samples(scf, variables, timeout):
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError('Timed out waiting for position telemetry.')
+                raise TimeoutError("Timed out waiting for position telemetry.")
             try:
                 sample = samples.get(timeout=remaining)
             except Empty as exc:
-                raise TimeoutError('Timed out waiting for position telemetry.') from exc
+                raise TimeoutError("Timed out waiting for position telemetry.") from exc
             if isinstance(sample, Exception):
                 raise sample
             yield sample
@@ -78,7 +80,7 @@ def position_samples(scf, variables, timeout):
 
 def wait_for_position_estimate(scf, timeout=10.0):
     """Block until the Kalman filter's position estimate has converged."""
-    variables = ('kalman.varPX', 'kalman.varPY', 'kalman.varPZ')
+    variables = ("kalman.varPX", "kalman.varPY", "kalman.varPZ")
     histories = [deque(maxlen=10) for _ in variables]
     threshold = 0.001
     with position_samples(scf, variables, timeout) as samples:
@@ -86,30 +88,33 @@ def wait_for_position_estimate(scf, timeout=10.0):
             for variable, history in zip(variables, histories):
                 value = data[variable]
                 if not math.isfinite(value) or value < 0:
-                    raise RuntimeError(f'Invalid estimator variance: {variable}={value}')
+                    raise RuntimeError(
+                        f"Invalid estimator variance: {variable}={value}"
+                    )
                 history.append(value)
-            if all(len(h) == h.maxlen and max(h) - min(h) < threshold
-                   for h in histories):
-                print('Position estimate converged.')
+            if all(
+                len(h) == h.maxlen and max(h) - min(h) < threshold for h in histories
+            ):
+                print("Position estimate converged.")
                 return True
 
 
 def reset_estimator(scf):
     cf = scf.cf
-    cf.param.set_value('stabilizer.estimator', '2')
-    cf.param.set_value('kalman.resetEstimation', '1')
+    cf.param.set_value("stabilizer.estimator", "2")
+    cf.param.set_value("kalman.resetEstimation", "1")
     time.sleep(0.1)
-    cf.param.set_value('kalman.resetEstimation', '0')
+    cf.param.set_value("kalman.resetEstimation", "0")
     wait_for_position_estimate(scf)
 
 
 def read_position(scf, timeout=5.0):
-    variables = ('stateEstimate.x', 'stateEstimate.y', 'stateEstimate.z')
+    variables = ("stateEstimate.x", "stateEstimate.y", "stateEstimate.z")
     with position_samples(scf, variables, timeout) as samples:
         data = next(samples)
         position = tuple(data[v] for v in variables)
         if not all(math.isfinite(v) for v in position):
-            raise RuntimeError('Invalid position estimate.')
+            raise RuntimeError("Invalid position estimate.")
         return position
 
 
@@ -172,57 +177,82 @@ def orbit(cf):
 
 
 def main():
-    for name, value in (('ORBIT_RADIUS', ORBIT_RADIUS),
-                        ('ORBIT_PERIOD', ORBIT_PERIOD), ('NUM_LAPS', NUM_LAPS),
-                        ('SETPOINT_HZ', SETPOINT_HZ)):
+    for name, value in (
+        ("ORBIT_RADIUS", ORBIT_RADIUS),
+        ("ORBIT_PERIOD", ORBIT_PERIOD),
+        ("NUM_LAPS", NUM_LAPS),
+        ("SETPOINT_HZ", SETPOINT_HZ),
+    ):
         if not math.isfinite(value) or value <= 0:
-            raise ValueError(f'{name} must be finite and positive.')
+            raise ValueError(f"{name} must be finite and positive.")
     if not all(math.isfinite(v) for v in (OBJECT_X, OBJECT_Y, ORBIT_HEIGHT)):
-        raise ValueError('Object coordinates and orbit height must be finite.')
+        raise ValueError("Object coordinates and orbit height must be finite.")
     if int(ORBIT_PERIOD * NUM_LAPS * SETPOINT_HZ) < 1 or SETPOINT_HZ < 1:
-        raise ValueError('Flight settings must produce at least one setpoint per second.')
+        raise ValueError(
+            "Flight settings must produce at least one setpoint per second."
+        )
     cflib.crtp.init_drivers()
 
-    with SyncCrazyflie(URI, cf=Crazyflie(rw_cache='./cache')) as scf:
+    with SyncCrazyflie(URI, cf=Crazyflie(rw_cache="./cache")) as scf:
         cf = scf.cf
 
-        print('Resetting estimator...')
+        print("Resetting estimator...")
         reset_estimator(scf)
 
         home_x, home_y, home_z = read_position(scf)
         if ORBIT_HEIGHT <= home_z:
-            raise ValueError('ORBIT_HEIGHT must be above the measured takeoff altitude.')
+            raise ValueError(
+                "ORBIT_HEIGHT must be above the measured takeoff altitude."
+            )
         start_x = OBJECT_X + ORBIT_RADIUS
         start_y = OBJECT_Y
 
         # New cflib exposes arming through supervisor; retain older API support.
-        arming = getattr(cf, 'supervisor', cf.platform)
+        arming = getattr(cf, "supervisor", cf.platform)
         try:
             arming.send_arming_request(True)
             time.sleep(1.0)
 
-            print('Taking off...')
-            ramp_to_height(cf, home_x, home_y, ORBIT_HEIGHT, duration=2.0,
-                           start_z=home_z)
+            print("Taking off...")
+            ramp_to_height(
+                cf, home_x, home_y, ORBIT_HEIGHT, duration=2.0, start_z=home_z
+            )
 
-            print('Flying to orbit start point...')
-            fly_to_point(cf, home_x, home_y, ORBIT_HEIGHT,
-                         start_x, start_y, ORBIT_HEIGHT, duration=3.0)
+            print("Flying to orbit start point...")
+            fly_to_point(
+                cf,
+                home_x,
+                home_y,
+                ORBIT_HEIGHT,
+                start_x,
+                start_y,
+                ORBIT_HEIGHT,
+                duration=3.0,
+            )
 
-            print(f'Orbiting object at ({OBJECT_X}, {OBJECT_Y}) '
-                  f'with radius {ORBIT_RADIUS} m for {NUM_LAPS} laps...')
+            print(
+                f"Orbiting object at ({OBJECT_X}, {OBJECT_Y}) "
+                f"with radius {ORBIT_RADIUS} m for {NUM_LAPS} laps..."
+            )
             orbit(cf)
 
-            print('Returning to landing point...')
+            print("Returning to landing point...")
             theta = 2 * math.pi * NUM_LAPS
             end_x = OBJECT_X + ORBIT_RADIUS * math.cos(theta)
             end_y = OBJECT_Y + ORBIT_RADIUS * math.sin(theta)
-            fly_to_point(cf, end_x, end_y, ORBIT_HEIGHT,
-                         home_x, home_y, ORBIT_HEIGHT, duration=3.0)
+            fly_to_point(
+                cf,
+                end_x,
+                end_y,
+                ORBIT_HEIGHT,
+                home_x,
+                home_y,
+                ORBIT_HEIGHT,
+                duration=3.0,
+            )
 
-            print('Landing...')
-            ramp_down(cf, home_x, home_y, ORBIT_HEIGHT, duration=2.0,
-                      target_z=home_z)
+            print("Landing...")
+            ramp_down(cf, home_x, home_y, ORBIT_HEIGHT, duration=2.0, target_z=home_z)
         finally:
             # Stop while the radio link is still open, even on Ctrl-C/errors.
             try:
@@ -230,12 +260,12 @@ def main():
                 time.sleep(0.1)
             finally:
                 arming.send_arming_request(False)
-        print('Done.')
+        print("Done.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print('\nEmergency stop triggered by user.')
+        print("\nEmergency stop triggered by user.")
         sys.exit(1)

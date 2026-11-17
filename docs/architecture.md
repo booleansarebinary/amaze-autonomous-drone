@@ -1,1 +1,1 @@
-
+describe the mission and what the code does with no AI
