@@ -30,9 +30,9 @@ URI = 'radio://0/80/2M'
 logging.basicConfig(level=logging.ERROR)
 
 # --- Tuning knobs ---
-TARGET_DISTANCE = 0.5   # (m) desired gap to hold from your hand on each axis
+TARGET_DISTANCE = 0.7   # (m) desired gap to hold from your hand on each axis
 DEADBAND = 0.03         # (m) ignore error smaller than this, to reduce jitter
-KP = 7.0                # proportional gain: velocity = KP * error
+KP = 4.0                # proportional gain: velocity = KP * error
 KD = 2.5                # gain on how fast the gap is changing (hand speed relative to drone)
 MAX_VELOCITY = 0.8      # (m/s) clamp so it doesn't lurch
 LOOP_DT = 0.05          # (s) ~20 Hz control loop
