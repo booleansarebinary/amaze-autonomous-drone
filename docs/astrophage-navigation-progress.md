@@ -2041,3 +2041,154 @@ to those snapshots. Only this progress record and the follower design belong
 to that change; the existing README edits and three document deletions remain
 excluded. Detailed command-interface findings are in
 [the follower design](astrophage-waypoint-follower-design.md).
+
+## Team-lead script phase: audit and Chunk 0 synchronization
+
+### Current implementation decision
+
+This phase improves `algorithms/astrophage_collection_script.py` directly.
+That file remains the final runnable mission script and contains all new
+mission runtime helpers. Focused tests will live separately in
+`algorithms/test_astrophage_collection_script.py`. Existing navigation modules
+and their tests may inform changes but will not replace the team lead's script.
+No new runtime architecture, reactive avoidance, ultrasound, or frontend is
+planned in this phase. Earlier cell-center and separate-component proposals
+in this record and the follower design are historical, not current geometry
+or file-layout decisions. The script's grid-point convention is retained.
+
+### Initial read-only audit: Chunk -1
+
+The local audit baseline was `873ea5a45827acb66aa1e0b1bc2e004285861738`.
+The current 171-line script provides point conversion, point-to-rectangle
+clearance checks, cardinal A*, corner reduction, target/home legs, route
+printing, a dry-run option, and a timed high-level flight sequence.
+
+No focused tests for this script were found. Earlier 92-test results concern
+the separate navigation modules and do not establish this script's behavior.
+The script does not read live position snapshots or verify measured arrival.
+Its clearance checks do not check continuous segments or reserve space at
+arena walls. Home is assumed to be zero. Rounding can change a target without
+reporting the adjustment. There is no measured route/boundary monitor, explicit
+cancellation/fault policy, or versioned mission JSONL output.
+
+The audit changed no files, fetched nothing, installed nothing, and opened no
+hardware connection. Its report was supplied in conversation. Initial local
+README changes and three missing placeholder documents blocked synchronization.
+At the user's explicit direction, the three original placeholders were restored
+and the existing README was committed separately as `051f30b`
+(`Save existing README setup notes`). That commit was not pushed. Its older
+paths and Docker instructions remain unverified; this chunk does not rewrite it.
+
+### Chunk 0: verified remote comparison
+
+Purpose: verify repository history and dependency/interface facts before adding
+tests or modifying runtime behavior. The user authorized fetch and safe
+fast-forward synchronization. The worktree was clean before fetching.
+
+- Working directory: `C:/Users/victo/amaze-hula-hoop`.
+- Local branch: `astrophage-collection`.
+- Upstream: `origin/MAIN_collect_the_astrophage`.
+- Verified origin: `https://github.com/booleansarebinary/amaze-autonomous-drone.git`.
+- `git fetch origin` succeeded, exit 0. Other remote branch references advanced;
+  the mission branch did not. No other branch was merged or checked out.
+- Fetched mission tip: `873ea5a45827acb66aa1e0b1bc2e004285861738`.
+- Verified local baseline: `051f30babb777f8c9b94a9027ae29b28a90d0ed0`.
+- `git rev-list --left-right --count HEAD...origin/MAIN_collect_the_astrophage`
+  returned `1 0`: one local README commit and no incoming commits.
+
+All fetched mission history is already included locally, so no fast-forward
+operation was needed. There is no divergence. The only local committed
+difference from the mission remote is README.md. The mission script,
+dependencies, and Docker configuration have no differences from that remote,
+so incoming changes require no revision of the initial script audit.
+
+### Dependency and command-interface findings
+
+| Component | Actual observation | Meaning and next action |
+|---|---|---|
+| Python selection | Project requires >=3.10; `.python-version` selects 3.10; no worktree `.venv` | Project-local setup remains pending; do not silently change the selected interpreter |
+| Available environment | Sibling `amaze-test-flight/.venv` runs Python 3.14.7 | Usable for the executed inspection; not the project's selected 3.10 environment |
+| cflib | Installed 0.1.33; lockfile selects 0.1.33 | Source/API inspection possible; actual firmware compatibility still unknown |
+| Required packages | PyUSB 1.3.1, libusb-package 1.0.30.0, NumPy 2.5.3, SciPy 1.18.1, packaging 25.0, PyYAML 6.0.3 | All imported successfully in the sibling environment |
+| USB backend | libusb0, default libusb1, and OpenUSB return no backend; explicitly packaged libusb1 loads | Default radio backend loading needs a reviewed fix; no dependency was installed or patched |
+| Present USB hardware | Windows enumeration succeeded; no matching Crazyradio `1915:7777` device | Radio access/driver and physical positioning hardware remain unverified |
+| Docker | Client 29.8.0 present; Linux-engine pipe unavailable, exit 1 | No container was started; native Windows is the proposed initial path |
+| Command tools | `uv` and `usbipd` not found on PATH | Setup is pending; no tool was installed |
+| Firmware/decks | No connection opened | No firmware identity, live field meaning, positioning capability, or flight result claimed |
+
+The installed PositionHlCommander go_to method sleeps for calculated travel
+time and updates remembered coordinates; get_position returns those coordinates.
+It is not measured arrival. Its context takes off and lands automatically;
+selecting CONTROLLER_PID can write a controller parameter at construction.
+The estimator-reset helper writes reset parameters and checks variance history,
+not map alignment or absolute accuracy.
+
+MotionCommander has automatic takeoff/reset/landing and a background hover
+sender with a default 0.2-second update period. Direct body-frame hover and
+world-frame velocity APIs are available, but firmware support and usable
+measurements must be verified before selecting the flight command family.
+High-level stop and send_stop_setpoint turn motors off; neither means hold.
+Crazyflie.close_link sends a zero-thrust setpoint before closing an open link,
+so strict telemetry-only cleanup needs explicit testing of that hidden call.
+No commander object, radio scan, estimator reset, arming, or flight was invoked.
+
+### Acceptance and executed checks
+
+| Criterion | Result |
+|---|---|
+| Verify directory, branch, origin, upstream and clean pre-fetch state | PASS |
+| Fetch verified remote and synchronize only when safe | PASS: fetch succeeded; all mission history already included; no merge needed |
+| Preserve the approved local README commit and placeholders | PASS: no reset, stash, discard, branch replacement or push |
+| Recheck findings affected by incoming changes | PASS: no incoming mission changes; script findings unchanged |
+| Inspect dependencies and library lifecycle without hardware connection | PASS: imports/backend probes and source inspection only; hardware facts remain pending |
+| Keep runtime and tests unchanged | PASS: only this progress record is edited |
+
+Exact import-check command, exit 0:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "import sys,cflib,usb,numpy,scipy,packaging,yaml,libusb_package; print('Dependency imports passed'); print('Python:',sys.version.split()[0])"
+```
+
+Actual output was `Dependency imports passed` and `Python: 3.14.7`.
+Backend-loading probes were separate software checks, not USB/radio access.
+Docker check command, exit 1:
+
+```powershell
+docker version --format '{{.Client.Version}} {{if .Server}}{{.Server.Version}}{{end}}'
+```
+
+It printed client 29.8.0 and reported that the Docker Desktop Linux-engine
+pipe did not exist. No attempt was made to start or repair Docker. Optional
+Get-Command lookup returned no uv/usbipd and ended that combined inspection
+command with exit 1; that is not a failed Python import or mission test.
+Documentation verification: `git diff --check -- docs/astrophage-navigation-progress.md`
+passed with no whitespace errors. Implementation tests and deliberate mutation
+checks are NOT APPLICABLE to this inspection chunk and were not run.
+
+Worked example using the actual Git result: `1 0` means the remote contributes
+zero commits missing locally, while the local README commit is not on the
+remote. This is why no pull/merge or push was performed.
+
+### Remaining work, next proposed chunk, and Git status
+
+All eight existing functions can retain their names and basic structure:
+to_cell, to_meters, is_blocked, astar, corners, plan, fly, and main. Their missing
+validation and measured-execution behavior will be handled in small reviewed
+changes. No function contract changed here.
+
+Next proposed purpose: conversion characterization tests only, in the separate
+test file named above, with no production changes. Check grid-point round trips,
+distinct x/y axes, configured origin/spacing, absence of a half-cell offset, and
+the existing nearest-point rounding behavior. These tests protect existing
+useful behavior; no artificial failing implementation will be introduced.
+For example, with zero origin and spacing 0.1 m, point `(3,2)` corresponds to
+approximately `(0.3,0.2)` meters. This is a hypothetical test example, not an
+executed mission result. Invalid-input fixes and full planning/dry-run tests
+remain separate later chunks, as do dependency setup and hardware verification.
+
+Only this progress file is uncommitted for Chunk 0; it remains unstaged.
+No new commit or push was made. The sole existing outgoing commit is the
+approved local README commit `051f30b`, whose push has not been authorized.
+Any future push must review that outgoing history separately. No operator
+guide is advertised as runnable before its features and prerequisites exist.
+Stop here for review before writing the first tests.
