@@ -37,7 +37,7 @@ KD = 2.5                # gain on how fast the gap is changing (hand speed relat
 MAX_VELOCITY = 0.8      # (m/s) clamp so it doesn't lurch
 LOOP_DT = 0.05          # (s) ~20 Hz control loop
 MIN_DETECT_DISTANCE = 0.12  # (m) closer than this is sensor noise / prop guard
-MAX_DETECT_DISTANCE = 0.8   # (m) a new hand must appear within this to be picked up
+MAX_DETECT_DISTANCE = 0.5   # (m) a new hand must appear within this to be picked up
 LOST_DISTANCE = 1.3         # (m) once locked on, keep following the hand out to this
 JUMP_REJECT = 0.3           # (m) a jump bigger than this in one tick means the hand left the beam
 FILTER_ALPHA = 0.5          # 0..1, weight of each new distance reading (higher = less smoothing)
