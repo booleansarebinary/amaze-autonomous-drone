@@ -2192,3 +2192,120 @@ approved local README commit `051f30b`, whose push has not been authorized.
 Any future push must review that outgoing history separately. No operator
 guide is advertised as runnable before its features and prerequisites exist.
 Stop here for review before writing the first tests.
+
+Subsequent approved Git outcome: the user approved committing/pushing this
+record and continuing to conversion tests. The record was committed as
+`f298b1b` (`Record mission script audit and synchronization baseline`). Outgoing
+history also contained the earlier README commit, whose push had not yet been
+approved. Pushes paused until the user explicitly approved both separate
+pushes. `051f30b` was then pushed first and `f298b1b` second, each adding one
+commit to `origin/MAIN_collect_the_astrophage`. No history was rewritten.
+
+## Team-lead script phase: Milestone 1A - grid-point conversion tests
+
+### Purpose and changes
+
+The conversion-test purpose was reviewed before continuation. This small chunk
+protects useful existing behavior in the team lead's actual runnable script.
+It does not change coordinates, planning, command behavior, or dependencies.
+
+- Added `algorithms/test_astrophage_collection_script.py`: seven focused
+  `GridPointConversionTests` using standard-library unittest.
+- Updated this existing progress record with results and remaining scope.
+- `algorithms/astrophage_collection_script.py` has no changes. All new mission
+  runtime behavior will continue to belong in that script, with tests separate.
+
+The tests cover the existing `to_cell` and `to_meters` functions directly.
+`unittest.mock.patch` temporarily supplies test AREA/CELL values in memory;
+cleanup restores their previous values after each test. No configuration file
+or runtime source is edited. `subTest` labels individual round-trip examples
+so a failure identifies which grid point was involved. Python's `*` before a
+coordinate pair passes its two values as separate function arguments.
+
+### Acceptance criteria and individual results
+
+| Criterion | Result and evidence |
+|---|---|
+| Keep tests separate from the final runtime script | PASS: only a new test file and this record change |
+| Keep grid-point geometry without a half-cell offset | PASS: index `(0,0)` converts to the origin itself |
+| Preserve distinct x/y axes | PASS: point `(3,2)` converts to approximately `(0.3,0.2)` meters and back |
+| Honor configured origin and spacing | PASS: origin `(-1,0.5)` and spacing 0.25 convert `(3,2)` to `(-0.25,1.0)` |
+| Round-trip points across a rectangular example | PASS: 45 points, including the upper corner, checked with exact binary spacing |
+| Characterize snapping between points | PASS: requested `(0.26,0.34)` selects `(3,3)`, which differs from the exact request |
+| Make existing halfway rounding explicit | PASS: with spacing 0.5, `(0.25,0.75)` maps to `(0,2)` and `(1.25,1.75)` to `(2,4)` |
+| Support negative meter positions relative to the supplied origin | PASS: origin `(-1,-2)`, spacing 0.5, request `(-0.74,-1.24)` maps to `(1,2)` |
+| Exercise pure conversion without hardware | PASS: no fly/main call, cflib initialization, connection, or commander context |
+
+These are characterization tests: they record selected useful behavior that
+already exists. They were written before any proposed conversion change, and
+passed the existing implementation immediately. No runtime implementation was
+needed and no failing baseline was manufactured. Existing Python rounding at
+ties is documented, not claimed to be a physically validated target policy.
+
+### Exact executed command and actual result
+
+From the mission worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v
+```
+
+Actual result: exit 0, seven tests passed, zero failures/errors/skips, using
+Python 3.14.7. The rectangular test checks 45 point cases within one method;
+those cases are not counted as 45 separate methods. No dependency was installed.
+Project-selected Python 3.10 compatibility was not executed. Existing unrelated
+navigation suites were not rerun for this test-only change; their earlier
+results remain historical evidence, not a new test result.
+
+Failures/fixes: no behavioral failures occurred and no production fix was
+needed. Documentation whitespace checks pass. The new file's exact check,
+`git diff --no-index --check -- NUL algorithms/test_astrophage_collection_script.py`,
+returns 1 for a new-file difference, with no whitespace error diagnostics.
+Git only reports its existing LF-to-CRLF conversion warning. This difference
+exit is not a failed unit test.
+
+Mutation checks: not due for this small characterization chunk. The requested
+planning, telemetry, monitoring, and command checkpoints remain ahead. No
+deliberately broken code was created or executed on hardware.
+
+### Executed small example
+
+Exact command:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms import astrophage_collection_script as mission; requested=(0.26,0.34); point=mission.to_cell(*requested); print('requested meters:',requested); print('grid point:',point); print('snapped meters: ({:.2f}, {:.2f})'.format(*mission.to_meters(point)))"
+```
+
+Actual output:
+
+```text
+requested meters: (0.26, 0.34)
+grid point: (3, 3)
+snapped meters: (0.30, 0.30)
+```
+
+The last line is formatted to two decimal places for display. Conversion chooses
+the nearest grid point using the existing round operation. This demonstrates a
+planned-coordinate adjustment, not movement or measured arrival. Reporting that
+adjustment in the mission's own output is a later behavior change.
+
+### Limitations, next proposed chunk, and Git state
+
+These tests do not validate malformed inputs, AREA's physical interpretation,
+obstacle clearance, A*, corners, complete legs, dry-run safety, telemetry,
+command semantics, or flight. No physical or mocked-flight success is claimed:
+only pure conversions were executed with temporary in-memory test settings.
+The dependency/backend and hardware limitations recorded in Chunk 0 remain.
+
+Next proposed purpose: add focused characterization tests for the script's
+existing `is_blocked` and `astar` on small valid supplied maps. Check a known
+point-to-rectangle clearance case, an open route, a detour, and an unreachable
+goal; inspect every returned step and compare shortest lengths where useful.
+Keep invalid-input fixes and continuous-segment validation for their own
+reviewed behavior changes. Corner reduction, full planning, and import/dry-run
+prohibitions will follow in separate small test chunks. No next chunk is started.
+
+At this review, only the new test file and this record are uncommitted and
+unstaged. Runtime source is unchanged. Both prior approved commits are pushed;
+there are no outgoing commits. No Milestone 1A commit or push was made. No
+prompts, logs, mutation artifacts, or credentials are included. Stop for review.
