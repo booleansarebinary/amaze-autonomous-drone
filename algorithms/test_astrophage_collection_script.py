@@ -65,6 +65,40 @@ class GridPointConversionTests(unittest.TestCase):
             self.assertEqual(mission.to_meters((1, 2)), (-0.5, -1.0))
 
 
+class CoordinateValidationTests(unittest.TestCase):
+    def test_to_cell_rejects_nonfinite_coordinates_on_either_axis(self):
+        for x, y in [
+            (float("nan"), 0),
+            (float("inf"), 0),
+            (-float("inf"), 0),
+            (0, float("nan")),
+            (0, float("inf")),
+            (0, -float("inf")),
+        ]:
+            with self.subTest(x=x, y=y):
+                with self.assertRaisesRegex(ValueError, "Coordinates must be finite numbers"):
+                    mission.to_cell(x, y)
+
+    def test_to_cell_rejects_non_numeric_values(self):
+        for x, y in [(None, 0), ("1", 0), (True, 0)]:
+            with self.subTest(x=x, y=y):
+                with self.assertRaisesRegex(ValueError, "Coordinates must be finite numbers"):
+                    mission.to_cell(x, y)
+
+    def test_plan_rejects_invalid_target_before_search(self):
+        with patch.object(mission, "HOME", (0.0, 0.0)), patch.object(mission, "astar") as search:
+            with self.assertRaisesRegex(ValueError, "Coordinates must be finite numbers"):
+                mission.plan([(float("inf"), 0)], [])
+            search.assert_not_called()
+
+    def test_plan_rejects_invalid_home_before_search(self):
+        with patch.object(mission, "HOME", (0.0, float("nan"))):
+            with patch.object(mission, "astar") as search:
+                with self.assertRaisesRegex(ValueError, "Coordinates must be finite numbers"):
+                    mission.plan([], [])
+                search.assert_not_called()
+
+
 class PointClearanceTests(unittest.TestCase):
     def setUp(self):
         settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=0.25, CLEARANCE=0.375)

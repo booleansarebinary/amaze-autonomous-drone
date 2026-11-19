@@ -10,7 +10,7 @@ navigation modules are reference work, not a replacement runtime architecture.
 Keep grid-point coordinates: `world = origin + index * spacing`, with no
 half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
 and reactive avoidance are outside this phase. No automatic physical flight.
-The latest focused run passed 25 tests on Python 3.14.7. The mission script
+The latest focused run passed 29 tests on Python 3.14.7. The mission script
 has since gained telemetry and position-check code in commits `d3bb309` and
 `4ace8f9`; physical flight is unverified.
 
@@ -364,18 +364,57 @@ planning-validation checkpoint remains due. Python 3.10 was not tested.
 
 **Limits/Git:** import safety depends on Crazyflie library imports remaining
 inside `fly()` or another explicit runtime call. A successful dry-run does not
-prove the actual flight path is safe. Only the separate test file and this
-record are changed; this chunk is uncommitted and unpushed. Stop for review.
+prove the actual flight path is safe. Committed and pushed as `f03e8b4` after
+approval. No runtime code changed in that chunk.
 
 **Plain-language recap:** We checked that opening the script does not load the
 drone library, and that `--dry-run` prints a route without calling the flight
 function. All 25 tests passed. These checks did not connect to or move a drone.
 
+## Milestone 2A - reject invalid physical coordinates
+
+**Purpose/files:** update `to_cell()` in the team lead's mission script to
+reject coordinates that are not finite numbers. Add four
+`CoordinateValidationTests` in the separate test file and record the results
+here. `plan()` already calls `to_cell()` for home and each target, so those
+inputs now receive the same check before A* search. Valid conversion and
+rounding behavior stay unchanged.
+
+**Acceptance results - all PASS:** NaN and positive/negative infinity on
+either axis raise `ValueError("Coordinates must be finite numbers")`; missing,
+text and boolean coordinates raise the same error; invalid targets or home are
+rejected before `astar()` runs; all earlier conversion and route tests pass.
+
+**Executed example:** `to_cell(float("inf"), 0)` now raises the stated
+`ValueError`. The same invalid value supplied as a target makes `plan()` raise
+before it searches for a path. This is a software result, not flight evidence.
+
+**TDD and verification:** first ran
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script.CoordinateValidationTests -v`
+against the old converter: 4 test methods ran and failed, with four failures
+and seven errors across their cases. NaN gave an unclear conversion message,
+infinity raised `OverflowError`, and boolean `True` was accepted. After the
+small check in `to_cell()`, ran
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v`:
+29 passed, zero failures/errors/skips on Python 3.14.7. `git diff --check`
+passed. No hardware or flight library was used. Mutation checks remain due
+at the later Milestone 2 planning-validation checkpoint; none ran here.
+
+**Limits/Git:** this validates supplied x/y coordinates only. `AREA`, `CELL`,
+obstacle rectangles, map bounds, snapped target reporting and continuous
+movement clearance still need review. Python 3.10 and physical flight remain
+untested. The script, separate test file and this record are modified locally;
+no 2A commit or push has occurred. Stop for review.
+
+**Plain-language recap:** If a target or home coordinate is missing, infinite
+or otherwise unusable, the script now stops with a clear error before planning
+a route. All 29 tests pass. We still need to check the map settings and the
+space between planned points.
+
 ## Remaining work and next review
 
-Next proposed chunk: begin Milestone 2 with input validation for grid
-configuration and coordinates, using tests before changing `to_cell()` or
-`plan()`. Keep the change limited to one clear validation behavior.
+Next proposed chunk: validate grid spacing and map extent settings before
+conversion or search, using focused tests first. No next chunk has started.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,

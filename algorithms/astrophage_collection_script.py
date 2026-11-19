@@ -12,6 +12,7 @@ Add --dry-run to print the route without flying.
 
 import argparse
 import heapq
+import math
 import time
 
 TARGETS = [(1.0, 1.0)]
@@ -28,6 +29,15 @@ URI = "radio://0/80/2M/E7E7E7E7E7"
 
 
 def to_cell(x, y):
+    for value in (x, y):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("Coordinates must be finite numbers")
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            finite = False
+        if not finite:
+            raise ValueError("Coordinates must be finite numbers")
     return round((x - AREA[0]) / CELL), round((y - AREA[2]) / CELL)
 
 
