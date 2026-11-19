@@ -10,7 +10,7 @@ navigation modules are reference work, not a replacement runtime architecture.
 Keep grid-point coordinates: `world = origin + index * spacing`, with no
 half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
 and reactive avoidance are outside this phase. No automatic physical flight.
-The latest focused run passed 13 tests on Python 3.14.7. The mission script
+The latest focused run passed 18 tests on Python 3.14.7. The mission script
 has not changed during the current test phase. Physical flight is unverified.
 
 This record summarizes completed work. The
@@ -261,12 +261,48 @@ and whether A* finds sensible shortest routes. All 13 tests passed. The example
 took six steps around an obstacle and reported no route through a wall. We still
 need to check the space between points before treating a route as safe to fly.
 
+## Milestone 1C - corner-reduction tests
+
+**Purpose/files:** add five CornerReductionTests in the same separate test file,
+plus this record. Exercise `corners()` on valid cardinal paths without changing
+the runtime script or its function contract.
+
+**Acceptance results - all PASS:** straight runs in all four directions keep
+only the destination; multiple turns and the final point stay in order; a
+one-step path omits its start; a one-point path returns an empty command list;
+retained points use the configured meter origin/spacing with no half-cell offset.
+Temporary in-memory test settings are restored after each test.
+
+**Executed test example:** with zero origin and 1 m spacing,
+`[(0,0),(1,0),(2,0),(2,1),(2,2),(1,2),(0,2),(0,1)]` becomes
+`[(2,0),(2,2),(0,2),(0,1)]`. Intermediate points along straight runs are removed;
+each turn and the destination remain. This is a command-list result, not flight.
+
+**Verification:** the exact unittest command in 1A exited 0: all 18 methods
+passed, zero failures/errors/skips on Python 3.14.7. Five methods are new; the
+previous 13 still pass. Existing behavior passed immediately, so no artificial
+failing baseline or production fix was needed. `git diff --check` passed, and
+the runtime-source diff is empty. No dependency changes or hardware access occurred.
+Mutations are not due for this small characterization chunk; the planning
+checkpoint remains due with Milestone 2. Python 3.10 was not executed.
+
+**Limits/Git:** reduction does not check obstacle clearance between retained
+points, actual start position, measured arrival, malformed paths, or flight.
+An empty command list for a one-point path is not proof of physical arrival.
+Only the test file and this record are modified, unstaged/uncommitted; no 1C
+commit or push occurred and there are no outgoing commits. Stop for review.
+
+**Plain-language recap:** We checked that the script removes unnecessary stops
+on straight stretches while keeping the turns and destination. All 18 tests
+passed, so the script needed no change. We still have to check that the actual
+movement between these points is safe.
+
 ## Remaining work and next review
 
-Next proposed chunk: focused tests for `corners()` on valid cardinal paths:
-straight runs, retained turns/final endpoint, and the one-point empty-command
-case. This does not prove the actual drone starts at the route's first point.
-Complete plan/import/dry-run tests follow separately; no next chunk has started.
+Next proposed chunk: focused tests for `plan()` with supplied targets, target
+ordering, outbound/home legs, and blocked/unreachable goal errors. Use small
+supplied maps and grid-aligned targets; no flight. Import/dry-run safety tests
+follow separately; no next chunk has started.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,
@@ -282,17 +318,17 @@ unmapped obstacles. No sensor/frontend work or automatic flight is authorized.
 Operator instructions/configuration guides will use implemented commands only;
 they are not yet available as verified live-testing procedures.
 
-## Documentation cleanup - current review
+## Documentation cleanup - completed
 
-Only this progress document changes. Repeated historical commands, review-time
+Only the progress document changed. Repeated historical commands, review-time
 Git status and duplicate explanations were condensed; full evidence remains
 in the linked committed record. Each post-synchronization chunk now ends with
 a plain-language recap. No runtime code, tests, dependencies or hardware changed.
 
 Verification: `git diff --check -- docs/astrophage-navigation-progress.md` passed.
 Implementation tests and mutations are not applicable and were not rerun.
-This cleanup remains uncommitted/unpushed; latest pushed commit is `2603fd6`,
-with no outgoing commits. Stop for review.
+The cleanup was committed/pushed as `e12e62d` after approval. This is the latest
+pushed commit; the subsequent 1C test changes above remain uncommitted.
 
 **Plain-language recap:** We shortened the record so the main decisions and
 results are easier to find. The older detail is still available in Git history.

@@ -1,4 +1,4 @@
-"""Pure conversion, clearance, and search tests for the mission script; no hardware."""
+"""Pure planning tests for the team lead's mission script; no hardware."""
 
 import unittest
 from unittest.mock import patch
@@ -122,6 +122,38 @@ class GridPointSearchTests(unittest.TestCase):
     def test_same_valid_start_and_goal_returns_one_point(self):
         route = mission.astar((1, 1), (1, 1), [])
         self.assert_valid_route(route, (1, 1), (1, 1), set(), steps=0)
+
+
+class CornerReductionTests(unittest.TestCase):
+    def setUp(self):
+        settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=1)
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def test_straight_runs_keep_only_the_final_point_in_each_direction(self):
+        for path, expected in [
+            ([(0, 1), (1, 1), (2, 1)], [(2, 1)]),
+            ([(2, 1), (1, 1), (0, 1)], [(0, 1)]),
+            ([(1, 0), (1, 1), (1, 2)], [(1, 2)]),
+            ([(1, 2), (1, 1), (1, 0)], [(1, 0)]),
+        ]:
+            with self.subTest(path=path):
+                self.assertEqual(mission.corners(path), expected)
+
+    def test_multiple_turns_and_final_point_are_retained_in_order(self):
+        path = [(0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1)]
+        self.assertEqual(mission.corners(path), [(2, 0), (2, 2), (0, 2), (0, 1)])
+
+    def test_one_step_path_omits_start_and_keeps_destination(self):
+        self.assertEqual(mission.corners([(1, 1), (2, 1)]), [(2, 1)])
+
+    def test_one_point_path_has_no_movement_commands(self):
+        self.assertEqual(mission.corners([(2, 1)]), [])
+
+    def test_retained_points_use_configured_origin_and_spacing(self):
+        with patch.multiple(mission, AREA=(-1, 0, 0.5, 1.5), CELL=0.25):
+            path = [(0, 0), (1, 0), (2, 0), (2, 1), (2, 2)]
+            self.assertEqual(mission.corners(path), [(-0.5, 0.5), (-0.5, 1.0)])
 
 
 if __name__ == "__main__":
