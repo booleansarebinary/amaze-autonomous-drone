@@ -1,2433 +1,299 @@
 # Astrophage navigation progress
 
-## Scope and inspection baseline
-
-The immediate priority is offline navigation with manually supplied maps,
-starts, and candidate locations while ultrasonic hardware is unavailable.
-The eventual mission remains described in [mission.md](mission.md).
-This record tracks the navigation chunks; the older sensor-first sequence and
-new-branch recommendation in [design-plan.md](design-plan.md) are superseded
-for this work. No replacement branch is needed.
-
-Chunk 0 inspected the mission documents, Git configuration, Python scripts,
-test tools, Docker files, and Ansur's reactive and mapped controllers without
-editing files. The mission branch has no previous grid planner. The cached
-`origin/MAIN_eridian_trench_run` version of `SensorMapPlanner._plan` provides
-an A*-style search to adapt later: priority queue, costs, predecessors, and
-obsolete-entry rejection. Its sensor mapping, diagonal moves, exploration
-fallback, and unknown-space penalties do not belong in the initial static
-unit-cost planner. Reactive avoidance remains a separate future integration.
-Existing geometry and plotting helpers may be useful in later chunks.
-
-## Chunk 1: grid representation and neighbors — PASS
-
-### Changes and behavior
-
-- `algorithms/grid_navigation.py`: adds `Grid`, `in_bounds`,
-  `is_traversable`, and `neighbors`, with `_validate_cell` for coordinate
-  validation. This pure module belongs alongside the existing algorithms
-  and imports no flight, radio, sensor, or plotting code.
-- `algorithms/test_grid_navigation.py`: adds nine focused `unittest` tests
-  covering the public grid behavior.
-- This progress record captures decisions and executed evidence.
-
-`Grid` stores positive integer width and height and an immutable snapshot of
-blocked cells. Changing the caller's obstacle set cannot alter the grid.
-Membership in that set identifies obstacles; other in-bounds cells are free.
-`in_bounds` checks both axes, `is_traversable` also excludes obstacles, and
-`neighbors` filters four candidate steps in east, north, west, south order.
-Each allowed step has unit cost; no search or heuristic is implemented yet.
-
-Cells are integer `(x, y)` tuples: x indexes width and y indexes height.
-Bounds are `0 <= x < width` and `0 <= y < height`. Diagram origin is lower
-left, with x increasing right and y increasing upward. A future row-based
-array must use `rows[y][x]`. Coordinates currently have cell units, with no
-physical size or world origin assigned.
-
-Malformed cell queries raise `ValueError`. Well-formed out-of-bounds queries
-return false for bounds/traversability and have no neighbors. Blocked sources
-also have no neighbors. Invalid dimensions and out-of-bounds or malformed
-blocked-cell tuples raise `ValueError`; nothing is silently clamped.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Rectangular grids preserve x/width and y/height | PASS | Rectangular bounds and traversability tests |
-| Bounds exclude negatives and upper limits | PASS | Bounds and invalid-obstacle tests |
-| Obstacles and out-of-bounds cells are not traversable | PASS | Traversability test |
-| Corners, edges, and interior have only legal cardinal neighbors | PASS | Corner/edge, interior, blocked-neighbor, and single-cell cases |
-| Neighbor order is deterministic | PASS | Ordered east/north/west/south expectations |
-| Invalid dimensions and blocked coordinates are rejected | PASS | Constructor validation test |
-| Queries reject malformed coordinates | PASS | Validation across all three query methods |
-| Caller edits cannot alter obstacle membership | PASS | Obstacle snapshot test |
-
-### Executed validation
-
-Interpreter: existing test-flight virtual environment, Python 3.14.7.
-No dependency installation was needed; production code uses standard-library
-features compatible with the project's declared Python >=3.10. Execution on
-Python 3.10 and the Docker Python 3.12 image was not performed.
-
-Tests were written before the production module. Exact command, run from the
-mission worktree root both before and after implementation:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
-```
-
-- Before implementation: exit 1, one loader error because
-  `algorithms.grid_navigation` did not exist. No behavioral assertions ran;
-  this is missing-module evidence, not a behavioral assertion failure.
-- After implementation: exit 0, nine tests passed, zero failures, zero errors,
-  zero skips. Adding the production module resolved the missing import.
-
-Executed example command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid; grid = Grid(width=4, height=3, blocked={(1, 0)}); print('neighbors((0, 0)) =', grid.neighbors((0, 0))); print('in_bounds((3, 2)) =', grid.in_bounds((3, 2))); print('in_bounds((2, 3)) =', grid.in_bounds((2, 3)))"
-```
-
-Actual output (exit 0):
-
-```text
-neighbors((0, 0)) = [(0, 1)]
-in_bounds((3, 2)) = True
-in_bounds((2, 3)) = False
-```
-
-East from `(0, 0)` is blocked; west and south leave the map, so only north
-remains. The last two outputs illustrate the rectangular axis convention.
-
-Mutation checks: NOT DUE in Chunk 1. The boundary and Manhattan-distance
-checkpoint is due in Chunk 2. No deliberate faults or mutation artifacts
-were created. No hardware or historical reactive simulations were run.
-
-### Limitations, Git state, and next chunk
-
-There is no A*, heuristic, physical coordinate conversion, footprint clearance,
-candidate policy, or waypoint follower yet. Altitude is assumed fixed.
-Physical use requires validating the fixed-altitude model, localization,
-clearance, tracking, and the connection from measured pose to the route.
-Offline grid results do not establish physical flight readiness. Real/fake
-candidate identity is absent from this module.
-
-Branch remains `astrophage-collection`, tracking
-`origin/MAIN_collect_the_astrophage`. No commit or push was performed, and
-nothing was staged. This chunk's three new files remain untracked pending
-review. Pre-existing README modifications and deletions of
-`docs/architecture.md`, `docs/decisions.md`, and `docs/pr_walkthrough.md` remain
-untouched. No prompts, logs, or temporary artifacts were added.
-
-Next proposed chunk: Manhattan distance with goal, single-axis, and mixed-axis
-tests, followed by isolated boundary and distance mutation checks. Stop for
-review before beginning that chunk.
-
-Subsequent Git outcome: after separate approval, Chunk 1 was committed as
-`72969d3` (`Add static occupancy grid and cardinal neighbors`) and pushed
-alone to `origin/MAIN_collect_the_astrophage`. The status above records the
-state at the original Chunk 1 review.
-
-## Chunk 2: Manhattan-distance heuristic — PASS
-
-### Changes and explanation
-
-- `algorithms/grid_navigation.py`: adds `manhattan_distance(start, goal)`.
-  It reuses `_validate_cell`, then adds the absolute x and y differences.
-- `algorithms/test_grid_navigation.py`: adds five test methods covering the
-  goal itself, horizontal and vertical movement in both directions, mixed-axis
-  cases, and malformed endpoints. Existing nine grid tests remain unchanged.
-- This record adds the acceptance evidence and controlled mutation results.
-
-The calculation is `abs(start_x - goal_x) + abs(start_y - goal_y)`. A legal
-step changes exactly one axis by one cell at cost one, so the result is the
-shortest distance on an obstacle-free grid. Obstacles can require extra steps;
-the calculation never overestimates a reachable goal's shortest route cost
-(an admissible heuristic). Across any legal adjacent step its value changes
-by at most one, matching the unit step cost (a consistent heuristic).
-
-This helper is independent of a map: it accepts integer coordinate tuples,
-including negative coordinates, but does not decide whether they are valid
-endpoints on a particular grid. Endpoint traversability belongs to the later
-search. It returns a cell-step count, not meters or flight time. There is
-still no A* search in this chunk. The small formula needs only 12 production
-lines including its explanation, rather than padding it to the chunk guide.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Goal itself has distance zero | PASS | Goal-itself test returns 0 |
-| Either axis counts unit steps in both directions | PASS | Horizontal returns 4; vertical returns 5 |
-| Mixed axes sum their step counts | PASS | Four mixed cases return 7, including opposite signs |
-| Reuse integer tuple validation for both endpoints | PASS | Malformed-endpoint subtests reject either endpoint |
-| Match four-direction, unit-cost assumptions | PASS | Formula and admissibility/consistency reasoning above |
-| Boundary fault detected by existing behavioral assertions | PASS | Inclusive-width mutant fails intended bounds assertion |
-| Distance fault detected by behavioral assertions | PASS | Missing-y mutant fails intended vertical assertion |
-| Restore correct code and rerun normal tests | PASS | Both temporary restorations and final worktree suite pass |
-
-### Tests and worked example
-
-All commands below use the existing Python 3.14.7 interpreter, with `-B`
-preventing bytecode artifacts. Run from the mission worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
-```
-
-Tests were added before the function. The first run exited 1: the existing
-nine grid tests passed, but the five new methods could not call the absent
-function (`AttributeError`, 17 error reports including subtests). These were
-missing-function errors, not assertion failures. Adding the function resolved
-them. After implementation and again after mutation checks, exit 0: 14 tests
-passed, zero failures, zero errors, zero skips.
-
-Executed worked example:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import manhattan_distance; print('same cell:', manhattan_distance((3, 2), (3, 2))); print('horizontal:', manhattan_distance((1, 2), (5, 2))); print('vertical:', manhattan_distance((3, 1), (3, 6))); print('mixed:', manhattan_distance((1, 2), (4, 6)))"
-```
-
-Actual output, exit 0:
-
-```text
-same cell: 0
-horizontal: 4
-vertical: 5
-mixed: 7
-```
-
-The mixed case needs at least three horizontal and four vertical moves.
-It does not demonstrate that a route exists through any supplied obstacles.
-
-### Controlled mutation checkpoint
-
-Exact executed command (temporary driver is outside the repository):
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk2_mutation_check.py
-```
-
-The driver copied only the actual navigation module and unchanged tests into
-an isolated temporary package. Each subprocess ran the same unittest command
-above from that copy, with `PYTHONPATH` removed. No sensor, radio, or flight
-module was included or executed. Baseline: 14 tests passed. Faults were
-injected one at a time into the copied production module.
-
-| Fault | Intended detecting test | Actual result |
-|---|---|---|
-| Change `x < self.width` to `x <= self.width` in `Grid.in_bounds` | `test_rectangular_bounds_use_x_for_width_and_y_for_height` | Exit 1; rejects mutant because `(4, 0)` incorrectly returns true for width 4. Seven assertion failures across bounds, neighbors, traversability, and validation; no errors. |
-| Omit the y-distance term from `manhattan_distance` | `test_vertical_distance_in_both_directions` | Exit 1; rejects mutant because distance is 0 instead of 5. Five assertion failures including four mixed-axis cases; no errors. |
-
-No mutant survived. Syntax, import, or infrastructure failures were not used
-as detection evidence. The original implementation was restored after each
-fault and the temporary suite passed all 14 tests each time. Tests remained
-byte-for-byte unchanged, and SHA-256 checks confirmed that the working-tree
-module and tests were never altered by the driver. The temporary package was
-removed after its resolved location was checked inside the system temporary
-directory. Driver exit: 0; cleanup confirmed. The external driver is not a
-tracked artifact and is not part of the proposed commit.
-
-### Git state, limitations, and next chunk
-
-Chunk 2 changes only the existing navigation module, its tests, and this
-progress record. They remain unstaged and uncommitted; no commit or push was
-performed for Chunk 2. No outgoing commit exists against the cached mission
-upstream. The pre-existing README change and three documentation deletions
-remain untouched. `git diff --check` passes.
-
-Limitations: no search, physical conversion, clearance inflation, or follower.
-No hardware or flight evidence was obtained. Fixed-altitude suitability and
-localization still require physical validation. A different movement or cost
-model would require reassessing this heuristic.
-
-Next proposed chunk: smallest complete A* search, adapting the existing
-search structure identified in Chunk 0. Stop here for review; commit and
-push of Chunk 2 require separate explicit approval.
-
-Subsequent Git outcome: after approval of a plain-language commit body,
-Chunk 2 was committed as `594bf3f` (`Add Manhattan distance for cardinal
-grid navigation`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
-The Git state above records the original Chunk 2 review.
-
-## Chunk 3: smallest complete A* search — PASS
-
-### Purpose and changes
-
-The purpose and acceptance criteria were presented for review before work
-began, and implementation was authorized. This chunk connects the existing
-grid and distance estimate into a shortest-route search.
-
-- `algorithms/grid_navigation.py`: adds `astar(grid, start, goal)` and
-  standard-library `heapq` and `itertools.count` imports. No dependencies added.
-- `algorithms/test_grid_navigation.py`: adds seven search tests and a route
-  validation helper checking endpoints, length, free cells, and unit steps.
-- This record adds search decisions, test evidence, and a worked search.
-
-The implementation adapts the queue/cost/predecessor structure inspected in
-Ansur's `SensorMapPlanner._plan` on the cached trench mission branch. It uses
-the existing `Grid.neighbors` and `manhattan_distance` functions. Sensor-built
-maps, diagonal movement, exploration fallbacks, and unknown-space penalties
-are not imported. No second map representation or mission controller is added.
-
-### How search works
-
-`g` is the best known number of steps from the start to a cell. `h` is the
-Manhattan estimate of steps remaining. `f = g + h` is the priority for further
-exploration. Python's `heapq` is a priority queue: it efficiently selects the
-entry with the smallest priority without sorting the entire collection.
-
-Entries contain `(f, insertion_number, g, cell)`. The increasing insertion
-number makes equal priorities follow discovery order, combined with the
-grid's east/north/west/south order. Tests require repeatability and shortest
-length, without requiring one specific route when several shortest routes tie.
-
-For each legal neighbor, search considers a route one step longer than the
-current route. If it improves the neighbor's known cost, both that cost and
-its predecessor (the cell it came from) are updated and a new entry is queued.
-Old entries remain in the queue; when selected, an entry whose stored cost
-differs from the current best is skipped. The goal is accepted only when
-selected for expansion after this check. Predecessors are followed backward
-from the goal, then reversed to return the start-to-goal route.
-
-The return value includes both endpoints. Start equal to goal produces a
-one-cell route, provided that cell is valid. Blocked, out-of-bounds, or
-malformed endpoints raise `ValueError`. Valid but disconnected endpoints
-return `None`; a partial route is not substituted for reaching the goal.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Open-map shortest route includes both endpoints | PASS | 4-by-3 grid returns a valid 5-step route |
-| Route detours around supplied obstacles | PASS | 3-by-2 grid returns a valid 4-step route |
-| Returned cells and consecutive moves are legal | PASS | Shared assertions in all four nontrivial route tests |
-| Cheaper discoveries update cost and predecessor | PASS | Regression route has 17 steps; runtime trace records `(4, 3)` improving from 11 to 9 |
-| Obsolete entries are skipped | PASS | Code check and runtime trace of outdated `(4, 3)` entry with stored cost 11 and best cost 9 |
-| Finish when goal is selected, not first discovered | PASS | Goal check follows queue removal and freshness check; tiny search trace below |
-| Equal-priority choices are deterministic | PASS | Repeated calls return the same shortest route |
-| Invalid endpoints differ from no route | PASS | Four invalid endpoint cases raise; disconnected valid endpoints return `None` |
-| Start equal to goal returns one valid cell | PASS | Focused one-cell route test |
-
-### Tests and results
-
-Exact test command from the mission worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
-```
-
-Seven search tests were written first. A temporary search skeleton returning
-`None` allowed behavioral assertions to run before implementing the search.
-Red result: exit 1, 21 methods run, nine assertion failures including endpoint
-subtests, zero errors, zero skips. The 14 existing tests and the disconnected
-case passed; that case alone could not distinguish the skeleton from search.
-
-After replacing the skeleton with search: exit 0, all 21 tests passed, zero
-failures, zero errors, zero skips. Interpreter remains Python 3.14.7. No Docker
-build, dependency installation, sensor, radio, or flight operation was needed.
-
-The regression map was selected using a deterministic, hardware-free
-exploratory script comparing search with and without cheaper-cost updates.
-The exploratory first-discovery-only search returned 19 steps; the actual
-implementation returns 17. This exploration was not a controlled mutation of
-the actual implementation and is not counted as mutation evidence. The test
-checks the route's validity and length, not internal dictionary contents.
-
-Mutation checks: NOT DUE in Chunk 3. The prior boundary/distance checkpoint
-remains recorded in Chunk 2. Actual planner mutations and independent
-breadth-first-search comparisons are due in Chunk 4.
-
-### Executed worked search
-
-Exact example command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, astar; grid = Grid(3, 2, blocked={(1, 0)}); route = astar(grid, (0, 0), (2, 0)); print('route:', route); print('steps:', len(route) - 1); print('unreachable:', astar(Grid(3, 2, blocked={(1, 0), (1, 1)}), (0, 0), (2, 0)))"
-```
-
-Actual output, exit 0:
-
-```text
-route: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
-steps: 4
-unreachable: None
-```
-
-For the first input, the direct step east is blocked. A temporary diagnostic
-using Python's `sys.settrace` observed the actual implementation without
-editing it. Its selected cells and predecessor assignments were:
-
-| Selected cell | g: steps so far | h: estimate remaining | f: priority | New predecessor assignment |
-|---|---:|---:|---:|---|
-| `(0, 0)` | 0 | 2 | 2 | `(0, 1)` comes from `(0, 0)`, cost 1 |
-| `(0, 1)` | 1 | 3 | 4 | `(1, 1)` comes from `(0, 1)`, cost 2 |
-| `(1, 1)` | 2 | 2 | 4 | `(2, 1)` comes from `(1, 1)`, cost 3 |
-| `(2, 1)` | 3 | 1 | 4 | `(2, 0)` comes from `(2, 1)`, cost 4 |
-| `(2, 0)` | 4 | 0 | 4 | Goal selected; follow predecessors backward |
-
-The estimate initially understates the four-step detour, as expected.
-The same diagnostic on the 8-by-7 regression input observed the predecessor
-of `(4, 3)` being replaced with `(3, 3)`, reducing its cost from 11 to 9, and
-the old queue entry later being skipped. No tracing code was added to the
-production module or tests, and no diagnostic artifacts were saved in Git.
-
-### Limitations, Git state, and next proposed chunk
-
-This is offline pathfinding for a static, supplied, four-direction unit-cost
-map. Broad edge-case coverage, independent shortest-path verification, and
-planner mutations are still pending. Physical conversion, clearance,
-candidate policy, and waypoint following are not implemented. Fixed-altitude
-suitability and localization must be physically validated; these results do
-not demonstrate physical flight readiness.
-
-Only the navigation module, its tests, and this progress record changed for
-Chunk 3. They remain unstaged and uncommitted. No commit or push was performed.
-Pre-existing README modifications and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch is
-`astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
-No outgoing commits exist against the cached upstream. Whitespace checks
-use `git diff --check`.
-
-Next proposal: Chunk 4 will strengthen invalid-input and difficult-map cases,
-compare shortest lengths with an independently written breadth-first-search
-test oracle, and challenge obstacle checking and reconstruction with isolated
-faults. Its purpose must be reviewed before implementation begins. Stop here
-for Chunk 3 review; commit and push also require explicit approval.
-
-Subsequent Git outcome: Chunk 3 was committed with the approved plain-language
-body as `340ce02` (`Add A* search for static grid routes`) and pushed alone
-to `origin/MAIN_collect_the_astrophage`. The Git state above records its
-original review.
-
-## Chunk 4: planner edge cases and independent verification — PASS
-
-### Purpose, changes, and behavior
-
-The previously proposed verification scope was authorized before starting.
-This chunk checks existing behavior more thoroughly; no production change
-was needed. The A* module is unchanged from Chunk 3.
-
-- `algorithms/test_grid_navigation.py`: adds `breadth_first_steps`, seven test
-  methods, and stronger independent assertions in `assert_valid_route`.
-- This progress record documents coverage, executed results, and mutations.
-
-Breadth-first search explores cells in order of the number of steps needed
-to reach them, using a first-in/first-out queue (`collections.deque`). With
-equal step costs, the first arrival at the goal has the shortest length.
-This test-only checker uses raw dimensions and blocked-cell coordinates,
-its own movement/bounds checks, and a different movement order. It calls no
-production neighbor, traversability, heuristic, or search function and does
-not reconstruct a route. Its valid-input behavior is checked against four
-hand-counted examples: open map, detour, disconnected map, and start at goal.
-
-For each returned A* route, independent assertions check both endpoints,
-integer tuple coordinates, map bounds, blocked-cell exclusion, and one-cell
-horizontal/vertical moves. Length is compared with the independent answer;
-an unreachable result must be `None`. The assertions do not demand the same
-route when multiple shortest routes exist.
-
-The deterministic comparison covers all obstacle combinations except the
-two fixed free opposite-corner endpoints on three shapes:
-
-| Shape | Optional obstacle cells | Maps | Requests, both directions |
-|---|---:|---:|---:|
-| 3 by 3 | 7 | 128 | 256 |
-| 4 by 2 | 6 | 64 | 128 |
-| 2 by 4 | 6 | 64 | 128 |
-| Total | | 256 | 512 |
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Invalid inputs are distinct from a valid map with no route | PASS | Invalid endpoints raise `ValueError`; barriers/enclosures return `None` |
-| Start equals goal still requires a valid free cell | PASS | Single-cell route succeeds; blocked/outside same-cell requests raise |
-| Both endpoints reject every map boundary and malformed cells | PASS | Negative/upper x/y limits, floats, bools, NaN/infinity, wrong tuple size, list, string, and None |
-| Detours and narrow passages remain valid | PASS | Existing detour plus 5-by-5 wall-gap example requiring eight steps |
-| Rectangular and one-cell-wide maps preserve coordinates | PASS | 4-by-2/2-by-4 comparison sets and 1-by-5/5-by-1 routes in both directions |
-| Every returned route cell and move is checked independently | PASS | Stronger shared route assertions applied to examples and comparison cases |
-| Independent checker agrees on shortest length or no route | PASS | All 512 requests across 256 maps agree |
-| Obstacle and reconstruction faults produce behavioral failures | PASS | Both required mutants detected; details below |
-| Additional meaningful planner fault is detected | PASS | Keeping first discoveries gives 19 instead of 17 steps |
-| Equivalent mutation is explained, correct code restored | PASS | Outdated-entry guard experiment documented below; all restored suites pass |
-
-### Test-first verification and exact commands
-
-The expanded tests were written before considering production changes. Their
-first run already passed: the existing planner supplied the required behavior.
-No artificial failure or implementation change was introduced to manufacture
-a red/green cycle for this verification-only chunk. The deliberate faults
-below supplied behavioral failures against the same passing tests.
-
-Normal test command from the mission worktree root, using Python 3.14.7:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
-```
-
-Initial expanded suite and final restored worktree run: exit 0; 28 methods
-passed, zero failures, zero errors, zero skips. The 512 comparison requests
-are subtests within one method, not 512 additional test methods. No
-dependency installation, Docker build, hardware, or flight was involved.
-
-### Controlled mutation checkpoint
-
-Exact executed command; the driver is outside the repository:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk4_mutation_check.py
-```
-
-The driver copies the actual production module and unchanged relevant tests
-into a temporary package and runs the full 28-method suite in a fresh Python
-subprocess for each case. `PYTHONPATH` is removed, and no sensor, flight, or
-radio module is included. The child loads the same suite with unittest's
-standard loader and runner. Unchanged baseline: all 28 passed.
-
-| Injected fault | Intended detecting test | Actual outcome |
-|---|---|---|
-| Remove obstacle membership check from `Grid.is_traversable` | `test_obstacle_requires_a_detour` | Detected by length assertion: 2 instead of 4 steps. Full suite: 461 assertion failures including subtests, zero errors/skips; exit 1. |
-| Return `route[1:]`, omitting the starting cell | `test_open_grid_returns_a_shortest_route_with_both_endpoints` | Detected by starting-endpoint assertion. Full suite: 193 assertion failures including subtests, zero errors/skips; exit 1. |
-| Replace cheaper-cost comparison with first-discovery-only membership check | `test_later_cheaper_route_replaces_an_earlier_discovery` | Detected by length assertion: 19 instead of 17 steps. Full suite: one assertion failure, zero errors/skips; exit 1. |
-| Remove obsolete-entry guard | Output-equivalent under the present route contract | Survived: all 28 passed; zero failures/errors/skips, exit 0. This repeats expansions without changing returned routes; explanation below. |
-
-The last mutation is equivalent for route results under the current static
-grid and consistent Manhattan heuristic. The lower-cost entry is expanded
-before its obsolete entry, and already considers the same neighbors at lower
-cost. The older entry cannot improve those costs. Removing the check wastes
-work without changing the route. The guard is retained for efficiency; no
-assertion about internal expansion counts was manufactured to kill it.
-
-All three non-equivalent mutants failed through intended behavioral
-assertions, not syntax/import/infrastructure errors. No relevant behavioral
-mutant survived, so no coverage repair was needed. Correct source was
-restored after every experiment, and each of the four restored temporary
-baselines passed all 28 methods. Copied tests stayed byte-for-byte unchanged;
-SHA-256 checks confirmed the workspace module and tests were never modified
-by the driver. Cleanup was restricted to the verified system temporary
-directory and confirmed complete. Driver exit: 0. No deliberate fault or
-temporary driver is part of this change.
-
-### Executed worked example
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, astar; from algorithms.test_grid_navigation import breadth_first_steps; blocked = {(2, y) for y in range(5) if y != 2}; grid = Grid(5, 5, blocked); route = astar(grid, (0, 0), (4, 0)); print('blocked:', sorted(blocked)); print('route:', route); print('A* steps:', len(route) - 1); print('independent checker steps:', breadth_first_steps(5, 5, blocked, (0, 0), (4, 0)))"
-```
-
-Actual output, exit 0:
-
-```text
-blocked: [(2, 0), (2, 1), (2, 3), (2, 4)]
-route: [(0, 0), (1, 0), (1, 1), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1), (4, 0)]
-A* steps: 8
-independent checker steps: 8
-```
-
-The route must pass through the opening at `(2, 2)`, making it longer than
-the four-step direct distance. Both algorithms report eight steps.
-
-### Limitations, Git state, and next proposal
-
-Finite-map agreement is strong regression evidence, not a proof of every
-possible input or physical navigation. The checker assumes valid endpoints
-and unit costs; it is test-only. No world-coordinate conversion, clearance,
-candidate policy, or follower exists yet. Fixed-altitude suitability and
-localization require physical validation. No physical readiness is claimed.
-
-Only the test file and this progress record changed. The production module
-has no diff. Nothing was staged, committed, or pushed for Chunk 4. Existing
-README modifications and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch
-remains `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
-There are no outgoing commits against the cached upstream. Final whitespace
-check command is `git diff --check`.
-
-Next proposed purpose: Chunk 5 will define cell size, physical origin, axis
-directions, meter units, cell-center waypoints, and explicit boundary rules.
-It will test negative world coordinates and reject out-of-map points rather
-than clamp them. These conversions will issue no drone commands. Present
-the concrete conventions for review before implementing Chunk 5. Stop here
-for review; commit and push require explicit approval.
-
-Subsequent Git outcome: after approval, Chunk 4 was committed with its
-plain-language body as `e1b10fa` (`Verify grid routes with independent search
-and fault checks`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
-The preceding Git state records the original Chunk 4 review.
-
-## Chunk 5: physical coordinate conversion — PASS
-
-### Purpose, conventions, and files
-
-The conversion purpose and conventions were proposed at the Chunk 4 review;
-the instruction to commit/push Chunk 4 and continue authorized this chunk.
-This adds map-frame coordinates in meters without sending drone commands.
-
-- `algorithms/grid_navigation.py`: adds frozen `GridCoordinates`, configuration
-  validation, `cell_center`, `world_to_cell`, and `_validate_point`. It refers
-  to the existing `Grid`; there is no second occupancy map.
-- `algorithms/test_grid_navigation.py`: adds ten conversion tests.
-- This progress record adds conversion decisions and executed evidence.
-
-Cells are square with configurable `cell_size_m`. `origin_m` is the
-lower-left outer map boundary in meters, defaulting to `(0.0, 0.0)`.
-Map-frame +x/+y align with grid +x/+y: x indexes width, y indexes height.
-No rotation or measured-localization frame transform is implied.
-
-For cell `(x, y)`, the center is:
-
-```text
-world_x = origin_x + (x + 0.5) * cell_size_m
-world_y = origin_y + (y + 0.5) * cell_size_m
-```
-
-Cell-center coordinates are the intended future waypoint convention. A
-world point belongs to the cell whose lower edges are included and upper
-edges excluded. Thus an internal edge belongs to its positive side. The
-outer lower map boundaries are included; upper boundaries are outside.
-Out-of-map points raise `ValueError`; they are never silently clamped.
-
-The cell boundaries are the represented floating-point values
-`origin + index * cell_size_m`, with no implicit tolerance. The lookup
-compares these boundaries by repeatedly halving the candidate range of
-cells. This avoids subtraction/division rounding a point just inside an
-edge into the wrong cell. It uses logarithmic lookup and allocates no full
-boundary array. Numerical tolerance is not a substitute for measured
-localization uncertainty, which belongs in later physical validation.
-
-Sizes must be finite and positive; points/origin must be finite numeric
-two-tuples. Booleans are rejected. Construction also rejects overflowing
-map extents and configurations whose boundary-adjacent half-cell offsets
-cannot be represented at the configured coordinate magnitude. Cell queries
-reuse the existing integer coordinate and bounds validation.
-
-Conversion is independent of traversability: a blocked cell still has a
-physical location. A converted cell must pass the existing grid/planner
-checks before it can be used as a route endpoint.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Cell size, origin, axes, and meter units are explicit | PASS | Documented class/configuration and asymmetric coordinate examples |
-| Waypoints use cell centers | PASS | Center formula and exact expected coordinates |
-| Coordinates round-trip on rectangular grids | PASS | Every center on 4-by-2 and 2-by-4 maps converts back to its cell |
-| Negative world coordinates are supported | PASS | Nonzero negative origin and negative-point tests |
-| Internal boundaries belong to positive side | PASS | Separate x/y boundary tests, including decimal cell sizes |
-| Outer boundaries are explicit with no clamping | PASS | Exact upper edges/outside lower edges rejected; nearest inside values accepted |
-| Invalid cells, points, sizes, and origins are rejected | PASS | Type, shape, nonfinite, nonpositive, bounds, and representability cases |
-| Conversion remains separate from obstacle checks and commands | PASS | Blocked-cell conversion test; no flight/radio dependency or command path |
-
-### Test-first evidence and results
-
-Exact initial command, run from the mission worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.GridCoordinatesTests -v
-```
-
-Nine tests were written first, followed by an empty conversion skeleton with
-the proposed fields and constant-return methods. Red result: exit 1,
-nine methods run, 47 behavioral assertion failures including subtests,
-zero errors, zero skips. The assertions exercised missing conversion and
-validation behavior rather than failing on an absent import. A tenth
-representability test was added before the full implementation.
-
-After implementing conversion, exact full-suite command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -v
-```
-
-Result: exit 0; all 38 methods passed, zero failures, zero errors, zero skips.
-This includes the existing 512 A*/independent-search comparison requests.
-Interpreter remains Python 3.14.7; no dependencies were installed. Python
-3.10 and Docker Python 3.12 were not separately executed.
-
-Mutation checks: NOT DUE in Chunk 5. The required clearance-removal and
-axis/unit faults are due in Chunk 6. No mutation artifacts were added here.
-No hardware, radio, or flight code was run.
-
-### Executed worked example
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates; coordinates = GridCoordinates(Grid(4, 2), 0.5, (-1.0, -0.5)); print('cell (2, 1) center in meters:', coordinates.cell_center((2, 1))); print('point (0.25, 0.25) cell:', coordinates.world_to_cell((0.25, 0.25))); print('internal boundary (0.0, 0.0) cell:', coordinates.world_to_cell((0.0, 0.0))); print('negative point (-0.9, -0.4) cell:', coordinates.world_to_cell((-0.9, -0.4)))"
-```
-
-Actual output, exit 0:
-
-```text
-cell (2, 1) center in meters: (0.25, 0.25)
-point (0.25, 0.25) cell: (2, 1)
-internal boundary (0.0, 0.0) cell: (2, 1)
-negative point (-0.9, -0.4) cell: (0, 0)
-```
-
-For the first result: `-1 + 2.5 * 0.5 = 0.25` on x, and
-`-0.5 + 1.5 * 0.5 = 0.25` on y. The map spans `[-1, 1)` on x and
-`[-0.5, 0.5)` on y. Coordinates `(1.0, 0.0)` and `(0.0, 0.5)` are rejected
-by the executed boundary tests.
-
-### Limitations, Git state, and next proposal
-
-These are coordinates in an assumed aligned map frame, not measured drone
-positions or evidence of physical tracking. Connecting an actual starting
-pose to a cell-center route remains unvalidated. Fixed-altitude suitability,
-frame alignment, localization quality, and physical clearance still require
-validation. No altitude value, follower, radio connection, or flight command
-was introduced. Offline coordinate conversion proves no flight readiness.
-
-Chunk 4 was committed and pushed as approved before this work. Chunk 5's
-module, tests, and progress-record changes remain unstaged and uncommitted;
-no Chunk 5 commit or push was made. Pre-existing README modifications and
-deletions of `docs/architecture.md`, `docs/decisions.md`, and
-`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
-tracking `origin/MAIN_collect_the_astrophage`, with no outgoing commits
-against the cached upstream. Whitespace verification uses `git diff --check`.
-
-Next proposed purpose: Chunk 6 will reserve room for a provisional drone
-footprint plus configurable uncertainty margin, using cell geometry and
-arena boundaries. A route through a narrow gap may become unavailable while
-a wider route remains. Present the footprint, margin, and collision rules
-for review before implementing that chunk. Stop here for Chunk 5 review;
-committing and pushing this change require separate explicit approval.
-
-Subsequent Git outcome: after approval, Chunk 5 was committed with the simpler
-body as `b6646f1` (`Convert grid cells to map coordinates in meters`) and
-pushed alone to `origin/MAIN_collect_the_astrophage`. The preceding status
-records the original Chunk 5 review.
-
-## Chunk 6: clearance-aware planning — PASS
-
-### Purpose and files
-
-The footprint-plus-margin purpose was reviewed and implementation authorized
-along with the Chunk 5 commit/push. This chunk prepares a new blocked-cell map
-that the existing A* function can use without changes to search.
-
-- `algorithms/grid_navigation.py`: adds `inflate_obstacles(coordinates,
-  footprint_radius_m, margin_m)`, reusing `GridCoordinates` and `Grid`.
-- `algorithms/test_grid_navigation.py`: adds ten clearance tests.
-- This record documents geometry, provisional inputs, test results, and faults.
-
-Both radius and margin must be supplied explicitly as finite nonnegative
-meters. Their sum must be finite. There is no assumed hardware dimension or
-default physical margin. The radius must conservatively enclose the drone's
-horizontal footprint; the margin must account for measured positioning,
-tracking, map, and other relevant uncertainties before physical use. All
-numerical examples here are test configurations, not validated flight values.
-
-### Geometry and behavior
-
-Required clearance is footprint radius plus margin. A candidate cell is kept
-only if its entire square is farther than that clearance from all original
-obstacle squares and arena walls. Contact at the requested clearance is
-rejected. This is conservative over the whole cell, rather than just its
-center or the center of an obstacle. It also covers the cardinal segments
-between retained cell-center waypoints under the assumed static 2D geometry.
-It does not cover actual vehicle tracking or the connection from measured
-starting pose to the route.
-
-For an obstacle at index `(obstacle_x, obstacle_y)`, square-to-square gaps are:
-
-```text
-gap_x_m = max(abs(x - obstacle_x) - 1, 0) * cell_size_m
-gap_y_m = max(abs(y - obstacle_y) - 1, 0) * cell_size_m
-distance_m = hypot(gap_x_m, gap_y_m)
-```
-
-`hypot` computes the straight-line distance from these perpendicular gaps,
-including diagonal corner separation. Adjacent squares touch and have zero
-gap. Wall clearance uses the minimum distance from the full candidate square
-to the four arena edges. Map translation does not change these distances;
-cell size does. Only original obstacles are used when classifying cells,
-so new exclusions do not recursively inflate each other. The original map
-is unchanged, and the returned `Grid` is directly usable by `astar`.
-
-A tiny conservative numerical allowance is added for comparison:
-`max(1e-12 meters, clearance_m * 1e-12)`. This rejects near-contact when
-decimal floating-point rounding would otherwise incorrectly allow it.
-It is separate from the physical margin. Zero radius and zero margin
-explicitly disable the operation and return the original grid.
-
-Whole-cell exclusion can reject routes that a finer or less conservative
-planner could use. Any positive clearance excludes outermost arena cells
-and obstacle-adjacent cells, even where a cell center alone might fit.
-Callers must check the supplied start and goal on the resulting grid;
-existing A* raises `ValueError` if either becomes blocked and returns `None`
-if valid endpoints have become disconnected.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Explicit provisional footprint radius and configurable margin | PASS | Required parameters, finite/nonnegative validation, documented physical limitations |
-| Account for full obstacle/candidate squares and diagonal corners | PASS | Adjacent square and Euclidean corner-distance tests |
-| Include arena boundaries and reject exact contact | PASS | All four walls, exact threshold, and decimal-rounding tests |
-| Narrow corridor becomes unavailable | PASS | Original eight-step route becomes `None` with both endpoints still free |
-| Wider corridor remains usable | PASS | Eight-step route survives through its middle row |
-| Preserve meter scaling and translation behavior | PASS | 0.25/0.5 m cell sizes differ correctly; shifted origin gives identical exclusions |
-| Radius and margin both affect exclusions | PASS | Increasing only margin blocks a previously usable cell |
-| Preserve input map and explicit zero-clearance mode | PASS | Original obstacle set unchanged; zero total clearance returns unchanged map |
-| Clearance-removal and unit defects detected | PASS | Both required mutations fail behavioral assertions |
-| Restore correct code and rerun normal suite | PASS | Four restored temporary suites and final worktree suite pass |
-
-### Test-first sequence and actual results
-
-Exact first test command from the mission worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.ClearanceTests -q
-```
-
-Nine tests were written before implementation. An empty skeleton returning
-the input grid let them exercise the missing behavior. Red result: exit 1,
-nine methods run, 22 assertion failures including subtests, zero errors,
-zero skips. After implementation, the then-current 47-method suite passed.
-
-Review identified a decimal-contact issue: `3 * 0.1` compares slightly
-greater than `0.3`. A tenth test reproduced incorrect acceptance at an
-obstacle and at a wall, using this exact command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation.ClearanceTests.test_decimal_clearance_contact_is_not_lost_to_rounding -q
-```
-
-Red result: exit 1, one method, two behavioral assertion failures, zero
-errors/skips. Adding the conservative rounding allowance resolved the fault.
-
-Exact final full-suite command, also run after all mutations:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation -q
-```
-
-Result: exit 0; 48 methods passed, zero failures, zero errors, zero skips,
-including the existing 512 independent route-length comparisons. Interpreter
-is Python 3.14.7. No dependency installation, hardware, radio, or flight run.
-
-### Controlled mutation checkpoint
-
-Exact command; the driver remains outside the repository:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk6_mutation_check.py
-```
-
-The final checkpoint uses the actual implementation and unchanged final tests
-in a temporary isolated package. Each fault runs alone in a fresh Python
-subprocess, with `PYTHONPATH` removed, using unittest's standard suite loader
-and runner. Baseline: all 48 pass. No hardware adapter is included.
-
-| Fault | Intended detecting test | Final actual result |
-|---|---|---|
-| Return original map for every nonnegative clearance | `test_narrow_corridor_becomes_unreachable_with_clearance` | Eight-step corridor incorrectly remains available. 13 assertion failures including subtests, zero errors/skips; exit 1. |
-| Replace configured cell size with 1.0 m | `test_cell_size_changes_physical_clearance_and_origin_does_not` | Cell `(6, 3)` incorrectly remains free with the smaller cells. Six assertion failures, zero errors/skips; exit 1. |
-| Disable arena-wall clearance check | `test_arena_boundaries_reserve_the_whole_cell_and_reject_contact` | Arena-edge cell `(0, 2)` incorrectly remains free. Seven assertion failures including subtests, zero errors/skips; exit 1. |
-| Omit margin from total clearance | `test_footprint_and_margin_add_in_meters` | Cell `(6, 3)` incorrectly remains free when margin should exclude it. Two assertion failures, zero errors/skips; exit 1. |
-
-All faults were caught by intended behavioral assertions. No mutant survived;
-syntax/import/infrastructure failures were not used as detection evidence.
-The initial 47-test implementation also detected the four faults; after the
-decimal fix, the complete checkpoint was rerun against the final 48 tests.
-Each restored temporary baseline passed all 48 methods. Copied tests stayed
-byte-for-byte unchanged; SHA-256 checks confirmed that workspace source and
-tests were never altered by mutation runs. Temporary copies were removed
-after checking their resolved location inside the intended temporary root.
-Driver exit: 0; cleanup confirmed. No mutation artifact is part of the change.
-
-### Executed worked example
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles; narrow = Grid(11, 7, {(x, y) for x in range(3, 8) for y in (2, 4)}); wide = Grid(11, 9, {(x, y) for x in range(3, 8) for y in (2, 6)}); narrow_clear = inflate_obstacles(GridCoordinates(narrow, 0.25), 0.1, 0.05); wide_clear = inflate_obstacles(GridCoordinates(wide, 0.25), 0.1, 0.05); print('narrow before clearance steps:', len(astar(narrow, (1, 3), (9, 3))) - 1); print('narrow after clearance route:', astar(narrow_clear, (1, 3), (9, 3))); route = astar(wide_clear, (1, 4), (9, 4)); print('wide after clearance route:', route); print('wide after clearance steps:', len(route) - 1)"
-```
-
-Actual output, exit 0:
-
-```text
-narrow before clearance steps: 8
-narrow after clearance route: None
-wide after clearance route: [(1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (8, 4), (9, 4)]
-wide after clearance steps: 8
-```
-
-Both examples use 0.25 m cells, a test footprint radius of 0.10 m, and a
-test margin of 0.05 m. The narrow opening is one cell (0.25 m) wide;
-the wider opening is three cells (0.75 m) wide. These are planned routes
-under supplied geometry, not measured vehicle motion or validated dimensions.
-
-### Limitations, Git state, and next proposal
-
-The simple implementation checks every cell against original obstacles:
-time scales with width times height times obstacle count. It is intended
-for small supplied maps; no new optimization framework is introduced.
-The circle, margin, static obstacle map, fixed altitude, localization, and
-tracking assumptions must be validated before physical use. Inflation does
-not validate actual starting-pose connections, braking, moving obstacles,
-or flight readiness. Fine passages may be rejected conservatively.
-
-Chunk 5 was committed and pushed before this work. Chunk 6 changes only the
-navigation module, its tests, and this progress record. They remain unstaged
-and uncommitted; no Chunk 6 commit or push was made. Existing README changes
-and deletions of `docs/architecture.md`, `docs/decisions.md`, and
-`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
-tracking `origin/MAIN_collect_the_astrophage`; no outgoing commits exist
-against the cached upstream. Whitespace check: `git diff --check`.
-
-Next proposed purpose: split Chunk 7 into a text command-line demonstration,
-visualization, and planned-route JSON export if needed to keep each change
-small. Review the first subchunk's supplied map/start/goal input and text
-output before implementation. It will use the existing planner without a
-dashboard, sensor, or radio dependency. Stop here for Chunk 6 review;
-commit and push require separate explicit approval.
-
-Subsequent Git outcome: after approval, Chunk 6 was committed with its
-plain-language body as `bb582f5` (`Reserve space around obstacles and arena
-walls`) and pushed alone to `origin/MAIN_collect_the_astrophage`.
-The preceding Git state records its original review.
-
-## Chunk 7A: text-only offline demonstration — PASS
-
-### Scope and files
-
-The proposed text demo was reviewed and authorized. Chunk 7 is split so this
-change does not also introduce plotting and route export. It accepts a map,
-start, and goal, invokes existing planning behavior, and displays text.
-
-- `algorithms/grid_demo.py`: `load_grid` reads the supplied map, `render_grid`
-  displays the grid and route, and `main` handles arguments, optional clearance,
-  errors, and exit status. Existing planning/conversion/inflation code is reused
-  unchanged. No parallel search, new dependency, or hardware adapter is added.
-- `algorithms/test_grid_demo.py`: nine CLI tests, including a subprocess test
-  of the actual `python -m algorithms.grid_demo` entry point.
-- `examples/navigation/open.json`, `detour.json`, `unreachable.json`, and
-  `clearance.json`: small manually supplied maps for reproducible commands.
-- `docs/astrophage-navigation-demo.md`: map schema, commands, symbols, optional
-  clearance, exit codes, and limitations.
-- This record captures executed evidence.
-
-Maps contain required positive integer `width` and `height`, plus optional
-`blocked` integer `[x, y]` pairs. Other fields are rejected. The JSON arrays
-are converted to the existing integer tuple representation. Grid validates
-dimensions and obstacle bounds. Start/goal arguments are grid coordinates.
-
-The printed map displays highest y first, placing `(0, 0)` at lower left.
-`S` is start, `G` goal, `B` both, `*` route, `#` blocked, and `.` free.
-Endpoints are included in the printed coordinate list. Output is explicitly
-labeled `Planned route (offline)`; no generated route file is written.
-
-Optional `--cell-size-m`, `--footprint-radius-m`, and `--margin-m` must all be
-supplied together. They call the existing clearance function before planning.
-Otherwise, output states `Clearance: not applied (point grid)`. Displayed `#`
-cells include clearance exclusions when enabled. No default physical radius
-or margin is assumed. Invalid/excluded endpoints produce an error, distinct
-from valid endpoints with no route. The input map is never rewritten.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Accept supplied map, start, and goal without hardware | PASS | Module entry point and in-process CLI tests |
-| Show a labeled planned route with explicit grid axes | PASS | Open and detour display assertions |
-| Distinguish invalid input from no route | PASS | Exit 2 with stderr for invalid input; exit 1 for disconnected valid endpoints |
-| Handle start equal to goal | PASS | `B` marker and zero-step route |
-| Reuse clearance when explicitly configured | PASS | Narrow corridor is disconnected using supplied physical settings |
-| Reject incomplete/invalid clearance settings | PASS | Partial flags and negative radius cases |
-| Supply open, detour, and unreachable examples | PASS | All three commands executed; fourth clearance example also executed |
-| Report malformed or missing files without traceback | PASS | Invalid schema/JSON/nested coordinate and missing-file tests |
-
-### Test-first sequence, failures, and results
-
-Exact initial command, from the repository root with Python 3.14.7:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_demo -q
-```
-
-Eight CLI tests were written first. An empty `main` returning 0 let the tests
-exercise missing output and error handling. Red result: exit 1; eight methods,
-18 behavioral assertion failures including subtests, zero errors/skips.
-The first implementation passed all then-current 56 tests.
-
-An additional nested-coordinate case and a ninth missing-file test were added
-during input review. The CLI-only suite then exited 1 with one error: a nested
-list coordinate reached set construction and raised `TypeError`. The loader
-was corrected to reject noninteger coordinates before hashing them. This was
-an input-validation failure and fix, not mutation evidence.
-
-Exact final full-suite command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo -q
-```
-
-Result: exit 0; 57 methods passed, zero failures, zero errors, zero skips.
-This includes the existing 512 independent shortest-path comparisons.
-The real subprocess test captures stdout/stderr and validates the detour's
-map, route, and successful process exit. Other tests use the same `main`
-function with temporary supplied maps. No generated test file remains in
-the repository. No dependencies were installed, and no hardware was touched.
-
-Mutations: NOT DUE for this interface subchunk. The Chunk 6 checkpoint remains
-recorded above; no new deliberate faults or mutation artifacts were created.
-
-### Executed commands and worked output
-
-All four commands below were executed exactly, from the repository root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/clearance.json --start 1 2 --goal 5 2 --cell-size-m 0.25 --footprint-radius-m 0.1 --margin-m 0.05
-```
-
-| Input | Actual result | Exit |
-|---|---|---:|
-| Open 4-by-3 map, `(0, 0)` to `(3, 2)` | Five-step route | 0 |
-| 3-by-2 detour, obstacle `(1, 0)`, `(0, 0)` to `(2, 0)` | Four-step route | 0 |
-| 3-by-2 unreachable, obstacles `(1, 0)` and `(1, 1)` | No planned route | 1 |
-| Empty 7-by-5 map with test clearance settings | Four-step route; outermost cells excluded | 0 |
-
-Actual complete detour output:
-
-```text
-Planned route (offline)
-Grid cells: x right, y up; (0, 0) at lower left.
-Clearance: not applied (point grid).
-S=start, G=goal, B=start and goal, *=route, #=blocked, .=free
-***
-S#G
-Steps: 4
-Cells: [(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]
-```
-
-The direct step east is blocked, so the route goes up, across, and down.
-The clearance example used test values only: 0.25 m cells, 0.10 m radius,
-0.05 m margin. These results are planned grid routes, not measured flight data.
-
-### Limitations, Git state, and next proposal
-
-Output is text only. Plotting and valid planned-route JSON export are deferred
-to separate review subchunks. The map is manually supplied; there is no
-obstacle discovery, target identity input, candidate policy, or follower.
-Fixed-altitude suitability, map/localization alignment, footprint dimensions,
-tracking error, and the measured-start-to-route connection need validation
-before physical use. The demo establishes no physical flight readiness.
-
-Chunk 6 was committed and pushed before this work. Chunk 7A's new module,
-tests, four example maps, user guide, and progress changes remain unstaged
-and uncommitted. No Chunk 7A commit or push was made. The existing README
-change and deletions of `docs/architecture.md`, `docs/decisions.md`, and
-`docs/pr_walkthrough.md` remain untouched. Branch is `astrophage-collection`,
-tracking `origin/MAIN_collect_the_astrophage`, with no outgoing commits
-against the cached upstream. Whitespace checks cover the new files as well
-as tracked changes; no prompts, logs, or temporary artifacts were added.
-
-Next proposed purpose: Chunk 7B will add an optional plot of the supplied map
-and planned route, assessing reuse of the existing plotting facilities first.
-It will preserve text-only operation without a plotting dependency, distinguish
-planned routes from measured data, and handle no-route examples. Planned-route
-JSON export follows separately. Review plotting scope and dependency handling
-before implementation. Stop here for review; commit/push need explicit approval.
-
-Subsequent Git outcome: after approval, Chunk 7A was committed with its
-plain-language body as `b3f2fe9` (`Add a text demo for planning grid routes`)
-and pushed alone to `origin/MAIN_collect_the_astrophage`. The preceding
-status records the original Chunk 7A review.
-
-## Chunk 7B: optional saved route picture — PASS
-
-### Purpose, reuse, and changes
-
-The optional plotting purpose was reviewed and authorized before starting.
-This adds `--plot NEW_FILE.png` without changing the planner, input maps,
-route costs, text-only dependencies, or no-route exit status.
-
-- `algorithms/grid_plot.py`: `route_figure` builds the picture;
-  `save_route_plot` saves it to a new PNG file and clears figure data.
-- `algorithms/grid_demo.py`: adds the optional argument, passes original and
-  planning grids to the plotter, reports the filename, and handles plot errors.
-- `algorithms/test_grid_plot.py`: four real-backend content/file tests.
-- `algorithms/test_grid_demo.py`: three more tests covering dependency-free
-  text, a missing plotting dependency, and actual subprocess PNG generation.
-- `algorithms/requirements-grid-plot.txt`: optional Matplotlib requirement,
-  following the existing `matplotlib>=3.8,<4` demo convention inspected in
-  the test-flight object-orbit worktree. Core project dependencies and lock
-  file are unchanged.
-- Demo guide and this record document usage and executed evidence.
-
-Before choosing the implementation, Ansur's existing `plot_runs` on cached
-`origin/MAIN_eridian_trench_run` was inspected again. Its lazy imports,
-rectangle obstacles, equal-scale axes, and noninteractive Agg output are
-adapted here. Its simulator world/telemetry inputs and coupled NumPy/controller
-module are inappropriate dependencies for the pure static-grid CLI. Direct
-Figure/Agg objects avoid opening windows or changing pyplot's global backend.
-No simulator or flight adapter is imported.
-
-The picture distinguishes original obstacle squares from additional clearance
-exclusions, draws the existing planned route in grid-cell coordinates, and
-marks both endpoints. Integer axis coordinates are cell centers; cells span
-half a coordinate unit on either side. Axis units are cells, not meters.
-Both axes use the same scale and y increases upward. Titles explicitly label
-offline planning; unreachable cases show `No route` and omit a route line.
-PNG output is optional and requires a new filename. The input map and existing
-files are protected; a GUI window is never opened automatically.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Preserve text-only use without Matplotlib | PASS | Original environment has no Matplotlib; text and dependency-message tests pass |
-| Save an optional real image through the CLI | PASS | Real subprocess PNGs verified with Pillow |
-| Preserve obstacle area, route coordinates, axes, and offline label | PASS | Figure-content assertions and visual inspection |
-| Distinguish original obstacles from clearance exclusions | PASS | Separate legend/color assertions and inspected clearance picture |
-| Show unreachable cases without implying a completed route | PASS | No-route title/endpoints, no route line, PNG saved with exit 1 |
-| Preserve existing files and report missing dependency clearly | PASS | Exclusive-file test and simulated dependency absence |
-| Reuse existing plotting conventions without hardware dependencies | PASS | Existing-helper inspection and direct Agg adaptation above |
-
-### Environment and test-first evidence
-
-The existing test-flight interpreter initially reported Matplotlib and Pillow
-absent. A separate temporary Python 3.14.7 environment was created at
-`C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b`:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m venv C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m pip install --disable-pip-version-check --only-binary=:all: -r algorithms/requirements-grid-plot.txt
-```
-
-The first package download failed because sandbox networking was denied.
-The same install command succeeded with approved network access, installing
-Matplotlib 3.11.2, Pillow 13.0.0, and their dependencies in the temporary
-environment only. The shared flight environment was not modified. A temporary
-Matplotlib cache path keeps generated cache files outside the repository.
-
-Tests were written before implementation, with empty figure/save skeletons
-and no CLI plot option. Exact red command:
-
-```powershell
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_demo algorithms.test_grid_plot -q
-```
-
-Red result: exit 1; 16 methods, seven assertion failures including subtests,
-zero errors/skips. The assertions detected missing figures, missing file
-protection, and unimplemented CLI plot behavior rather than absent imports.
-
-Exact passing full-suite commands:
-
-```powershell
-$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot -q
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot -q
-```
-
-- With Matplotlib: exit 0, 64 passed, zero failures/errors/skips.
-- Original environment without Matplotlib: exit 0, 59 passed and five optional
-  image tests skipped, zero failures/errors. The text-mode and missing-library
-  message tests still execute.
-
-The real-backend tests check obstacle rectangle area, route coordinate data,
-ascending axes, explicit title/units, distinct clearance styling, no-route
-endpoints, preserved existing file bytes, and decodable PNG output from the
-actual CLI subprocess. These test visible plot behavior rather than only
-mocking plotting calls. No hardware, radio, or flight test was run.
-
-Mutation checks: NOT DUE for this visualization subchunk. No deliberate fault
-or mutation artifact was introduced. The prior clearance checkpoint remains
-recorded in Chunk 6.
-
-### Actual images and worked example
-
-Open, detour, and unreachable CLI images were generated and visually inspected
-under `C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b` using:
-
-```powershell
-$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\open.png
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\detour.png
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0 --plot C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\unreachable.png
-```
-
-Actual exits/results: open 0 with five steps; detour 0 with four steps;
-unreachable 1 with no route. Each command saved its PNG and retained the
-existing text output. The detour picture shows obstacle `(1, 0)` as a full
-square and route `[(0, 0), (0, 1), (1, 1), (2, 1), (2, 0)]` around it.
-
-A fourth clearance picture was also generated and visually inspected using
-this exact command:
-
-```powershell
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -c "from algorithms.grid_navigation import Grid, GridCoordinates, astar, inflate_obstacles; from algorithms.grid_plot import save_route_plot; grid = Grid(9, 7, {(4, 3)}); planning = inflate_obstacles(GridCoordinates(grid, 0.25), 0.1, 0.05); route = astar(planning, (1, 3), (7, 3)); save_route_plot(r'C:\Users\victo\AppData\Local\Temp\astrophage-grid-plots-7b\clearance.png', grid, planning, (1, 3), (7, 3), route); print('clearance route:', route); print('steps:', len(route) - 1)"
-```
-
-Actual exit 0, ten steps; route:
-`[(1, 3), (2, 3), (2, 4), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5), (7, 4), (7, 3)]`.
-The picture visibly separates the red original obstacle from orange added
-exclusions around it and the arena edges. These are test dimensions, not
-measured physical values. All four generated PNGs remain outside Git.
-
-### Limitations, Git state, and next proposal
-
-Plotting adds an optional Matplotlib dependency; the requirement range follows
-the existing demo convention, while the exact tested version is recorded above.
-No screenshot comparison or physical motion inference is claimed. Axes remain
-grid-cell coordinates. Planned-route JSON export is still pending.
-Fixed-altitude suitability, localization/frame alignment, physical dimensions,
-tracking, and the connection from measured pose to the first waypoint remain
-unvalidated. Pictures do not establish physical flight readiness.
-
-Chunk 7A was committed/pushed first. Chunk 7B's plot module, requirements file,
-tests, CLI integration, and documentation changes remain unstaged/uncommitted;
-no Chunk 7B commit or push was made. Existing README changes and deletions of
-`docs/architecture.md`, `docs/decisions.md`, and `docs/pr_walkthrough.md` remain
-untouched. Branch remains `astrophage-collection`, tracking
-`origin/MAIN_collect_the_astrophage`, with no outgoing commits against the
-cached upstream. Whitespace checks cover both tracked and new files. No
-generated images, caches, temporary environments, prompts, or logs are staged.
-
-Next proposed purpose: Chunk 7C will export the planned route and relevant
-supplied configuration as valid JSON, explicitly identified as planned data.
-Review the schema, unreachable representation, and output-file behavior before
-implementation. Stop here for review; commit/push need explicit approval.
-
-## Chunk 7C: planned-route JSON export — PASS
-
-### Scope, preserved work, and files
-
-The export purpose was proposed at the Chunk 7B review and authorized by
-the instruction to continue. That instruction did not authorize a commit
-or push. Chunk 7B remains uncommitted. Before this work, its seven files were
-copied and hash-checked in the temporary review snapshot
-`C:\Users\victo\AppData\Local\Temp\astrophage-7b-before-7c-0emnr3qi`.
-This preserves a basis for reviewing/staging the two changes separately;
-no branch, index, or Git history was changed to create the snapshot.
-
-- `algorithms/grid_export.py`: adds `save_plan`, which serializes the existing
-  planner's validated result and supplied configuration, then creates a new
-  JSON file. It does not implement another planner or measurement logger.
-- `algorithms/grid_demo.py`: adds `--export`, output-path checks, the save call,
-  and a confirmation message. Search, clearance, plotting, and exit semantics
-  are reused.
-- `algorithms/test_grid_export.py`: ten focused export tests, including real
-  subprocess operation and optional combined PNG/JSON generation.
-- Demo guide and this record document schema, commands, and evidence.
-
-### Schema and behavior
-
-Schema version 1 has `data_kind: "planned_route"`. It records original map
-dimensions/obstacles, the final planning blocked cells, supplied endpoints,
-four-direction/unit-cost/Manhattan movement settings, coordinate conventions,
-cell-center waypoint meaning, and the assumed unvalidated fixed-altitude model.
-Radius, margin, physical cell size, and the CLI's zero origin are saved when
-configured. A grid-only run leaves physical scale/origin/radius/margin null;
-the route remains in cells in every case. No measured pose or altitude value
-is invented, and no real/fake target identity enters the export or planner.
-
-`status: "route_found"` has a route including both endpoints and its step
-count. Start equal to goal retains one cell and zero steps. A valid map with
-no route exports `status: "unreachable"`, `route: null`, and `steps: null`,
-while retaining exit code 1. Input/output errors use the existing exit code 2.
-
-Sorted obstacle lists and keys, with no generated timestamp, make equal
-plans produce identical content. `json.dumps(..., allow_nan=False)` builds
-strict JSON before opening the destination, rejecting NaN/infinity without
-creating a malformed file. Exclusive creation preserves existing files.
-Input-map aliases and identical plot/export destinations are rejected.
-Missing parent directories are reported rather than created implicitly.
-
-When both outputs are requested, plotting happens first and JSON second.
-These are separate writes, not a transaction: a successful PNG may remain
-if the later JSON write fails. Neither output overwrites existing files.
-Generated exports stay outside Git, as do the review snapshot and PNGs.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Valid JSON identifies planned data and preserves route/endpoints | PASS | Real subprocess detour export parsed and checked |
-| Preserve supplied map, planning exclusions, and movement settings | PASS | Original/derived obstacles and unit-cost/Manhattan metadata assertions |
-| Record physical settings only when configured | PASS | Null physical frame for grid-only input; explicit settings and zero origin for clearance input |
-| Distinguish unreachable from zero-step success | PASS | Null route/steps with exit 1 versus one-cell route/zero steps with exit 0 |
-| Export without Matplotlib | PASS | Original environment and blocked-import test |
-| Preserve existing files and input map | PASS | Existing destination bytes and original JSON remain unchanged |
-| Reject plot/export filename collision before writing | PASS | Error message and absence of output file |
-| Reject nonfinite numbers before file creation | PASS | Direct serialization test raises and leaves no file |
-| Deterministic content and sorted obstacle lists | PASS | Two independent destination files have identical bytes |
-| Support PNG and JSON together when plotting is installed | PASS | Real subprocess generates both files and valid route metadata |
-
-### Exact test commands and actual results
-
-Before edits, the preserved Chunk 7B state passed all 64 methods in the
-existing temporary plotting environment. Ten export tests were then written
-before implementation, with an empty writer and no CLI export option.
-Exact red command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_export -q
-```
-
-Red result: exit 1; ten methods, eight behavioral assertion failures,
-zero errors, one optional combined-image test skipped. The missing-parent
-case alone could not distinguish the empty CLI from the desired error result;
-other assertions detected the missing export behavior and file creation.
-
-After implementing the writer and CLI integration, exact full-suite commands:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export -q
-$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export -q
-```
-
-- Without Matplotlib: exit 0; 68 passed, six optional image tests skipped,
-  zero failures/errors (74 methods total).
-- With Matplotlib 3.11.2: exit 0; all 74 passed, zero failures/errors/skips.
-
-Both environments use Python 3.14.7. Existing independent map comparisons
-remain included. No new dependency, hardware, radio, or flight operation.
-No implementation failures remained after replacing the empty writer and
-adding the CLI option. Mutation checks are NOT DUE for this export subchunk;
-the next required checkpoint is candidate/return behavior in Chunk 8.
-
-### Executed examples
-
-Exact commands, run from the repository root with fresh output filenames:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/open.json --start 0 0 --goal 3 2 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\open.json
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/detour.json --start 0 0 --goal 2 0 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\detour.json
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/unreachable.json --start 0 0 --goal 2 0 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\unreachable.json
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m algorithms.grid_demo examples/navigation/clearance.json --start 1 2 --goal 5 2 --cell-size-m 0.25 --footprint-radius-m 0.1 --margin-m 0.05 --export C:\Users\victo\AppData\Local\Temp\astrophage-grid-exports-7c\clearance.json
-```
-
-| Example | Actual export result | Exit |
-|---|---|---:|
-| Open map | `route_found`, five steps | 0 |
-| Detour | `route_found`, four steps | 0 |
-| Unreachable | `unreachable`, null route/steps | 1 |
-| Clearance | `route_found`, four steps and supplied settings | 0 |
-
-All four files were read with `json.loads` using a rejecting `parse_constant`
-callback to exclude nonstandard numeric constants; all parsed successfully.
-Actual detour excerpt (other schema fields omitted here):
-
-```json
-{
-  "schema_version": 1,
-  "data_kind": "planned_route",
-  "status": "route_found",
-  "route": [[0, 0], [0, 1], [1, 1], [2, 1], [2, 0]],
-  "steps": 4
-}
-```
-
-The full file also records obstacle `(1, 0)`, both endpoints, movement rules,
-and null physical scale because that invocation supplied grid coordinates
-only. These exports are plans, not measured flight data.
-
-### Limitations, Git state, and next proposal
-
-Export does not execute or follow a route, supply measured localization,
-discover obstacles, identify candidates, or validate physical flight. Meter
-origin currently follows the CLI's zero-origin convention when configured;
-arbitrary world origins remain supported by the separate conversion class.
-Fixed-altitude suitability, physical dimensions, map/frame accuracy, tracking,
-and the actual-start-to-route connection remain unvalidated.
-
-Chunk 7B and Chunk 7C both remain unstaged and uncommitted. No commit or push
-was performed this turn; only the already-pushed Chunk 7A is in HEAD.
-Chunk 7C changes the new export module/tests and the CLI/guide/progress record.
-The earlier plot module, its requirements, plot tests, and existing CLI tests
-are preserved. Git's cumulative diff includes both uncommitted chunks;
-Chunk 7C's incremental review uses the preserved Chunk 7B snapshot.
-Existing README changes and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch
-remains `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
-No outgoing commits exist against the cached upstream. Generated JSON, PNGs,
-snapshots, and temporary environments remain outside commits. Whitespace
-checks cover the new export files and tracked changes.
-
-Next proposed purpose: split Chunk 8 into candidate selection/visit tracking
-and a later simulated-detection/return subchunk. Before implementation,
-inspect any existing mission-controller code again, then review a simple
-supplied-order policy, explicit unreachable/no-target outcomes, and what
-counts as a completed visit. No hidden identity or hardware event is needed
-for candidate routing. Stop here for review; commit/push need explicit approval.
-
-Subsequent Git outcomes: after approval, 7B was committed as `ebb0b2b`
-(`Save optional pictures of planned grid routes`) and 7C as `4811b39`
-(`Export planned grid routes and settings as JSON`). Each was pushed
-separately to `origin/MAIN_collect_the_astrophage`, one new commit per push.
-The preserved 7B snapshot passed 64 tests in isolation before staging.
-Direct staging encountered a temporary-file read permission error; an
-index-only patch was checked and used instead, preserving working files.
-The temporary patch was removed before committing. The preceding status
-records the original 7C review, not the later approved commits.
-
-## Chunk 8A: supplied-order candidate visits — PASS
-
-### Purpose, inspection, and changes
-
-The candidate selection/confirmation purpose was reviewed and authorized.
-Work was interrupted by the user's exit request after writing tests and an
-empty policy skeleton. The subsequent resume continued from that exact state.
-
-Before choosing the implementation, current mission/design documents and
-existing code were inspected again. They specify a future mission controller,
-but the mission branch has no implemented candidate controller. Searches
-through cached branches found only the older backup's mission data,
-configuration, logging, and frame foundations. Its data types/configuration
-were read; they provide no reusable candidate-selection controller. No old
-branch was restored or historical physical assumptions imported.
-
-- `algorithms/candidate_visits.py`: adds frozen `CandidatePlan` and the small
-  `CandidateVisits` policy, using the existing `Grid` and `astar` unchanged.
-- `algorithms/test_candidate_visits.py`: ten focused behavior tests.
-- This record documents decisions, executed results, and remaining scope.
-
-### How it works
-
-Construction validates supplied candidate cells against the supplied grid,
-snapshots their order, and treats repeated coordinates as one location using
-their first occurrence. No target identity, color, sensor data, or real/fake
-flag is accepted or used to choose routes. A previously clearance-adjusted
-grid can be supplied directly; no second planner or map format is added.
-
-`plan_next(current)` validates the supplied current cell, tries unvisited
-locations in supplied order, and calls A* for each until one is reachable.
-It returns that target, the route including both endpoints, and any earlier
-unreachable candidates tried during this call. The route and result are
-immutable snapshots. The policy is supplied-order, not nearest-first.
-
-Planning does not mark a visit, even when current already equals the target.
-`confirm_visit(current)` accepts an explicit offline arrival assertion only
-when the cell matches the most recently selected candidate. It then records
-that location as visited and clears the pending selection. Confirmation
-without selection, for another location, or repeated confirmation raises
-`ValueError` without adding a visit. The public `visited` property returns
-an immutable snapshot, so callers cannot alter tracking through that value.
-
-Unreachable candidates are reported but not marked visited or permanently
-blacklisted. A later call checks them again from its supplied position.
-Supplying a position across a disconnected component is an offline input,
-not evidence that the drone traversed the barrier. Later route selection
-replaces the pending selection; confirmation always matches the latest one.
-
-| Result status | Meaning |
-|---|---|
-| `target_selected` | A route to the first reachable unvisited location is supplied |
-| `no_targets` | The supplied candidate list was empty |
-| `all_visited` | Every supplied distinct location was explicitly confirmed |
-| `all_unreachable` | Unvisited locations remain but none has a route from the supplied current cell |
-
-Terminal selection results have no target or route. `unreachable` lists
-only candidates tried during the current call; candidates after a selected
-target have not yet been checked. Blocked/out-of-bounds/malformed candidate
-or current cells are invalid inputs (`ValueError`), distinct from valid
-free candidates that cannot be reached.
-
-### Acceptance criteria
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Follow supplied order rather than nearest distance | PASS | Farther first candidate selected before nearer second candidate |
-| Reuse obstacle-aware A* on the supplied grid | PASS | Returned endpoints/length and ten-step clearance detour checked |
-| Planning never confirms a visit | PASS | Visited remains empty before confirmation, including a one-cell route |
-| Confirmed locations are skipped | PASS | Next selection changes after confirmation; all-visited status after both |
-| Confirmation matches the latest selected cell | PASS | Unrequested, wrong-cell, outside, and duplicate confirmations rejected |
-| Handle/report unreachable candidates without fake visits | PASS | Wall-separated first target reported; reachable second selected; unreachable target remains unvisited |
-| Distinguish empty/all-visited/all-unreachable outcomes | PASS | Separate status assertions and absent target/route |
-| Preserve candidate inputs and treat duplicate cells once | PASS | Later caller list changes have no effect; repeated location is not revisited |
-| Recheck reachability from a new supplied position | PASS | Previously unreachable target becomes selectable from another valid supplied cell |
-| Keep hidden identity and hardware outside decisions | PASS | API accepts only grid/cells; no sensor/radio/flight interface |
-
-### Test-first commands and actual results
-
-The tests preceded implementation. The empty skeleton always returned
-`no_targets`, recorded no confirmations, and performed no validation.
-The following exact command was run before the interruption and again on
-resume before replacing the skeleton:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_candidate_visits -q
-```
-
-Red result: exit 1; ten methods, 15 behavioral assertion failures including
-subtests, zero errors/skips. Replacing the skeleton with the supplied-order
-policy resolved those expected missing-behavior failures.
-
-Exact full-suite commands from the mission worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
-$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
-```
-
-- Without Matplotlib: exit 0, 78 passed, six optional image tests skipped,
-  zero failures/errors (84 methods total). Repeated after mutation checks.
-- With Matplotlib: exit 0, all 84 passed, zero failures/errors/skips.
-
-Both environments use Python 3.14.7. Existing independent route comparisons
-remain included. No new dependency, sensor, radio, or flight operation.
-
-### Controlled visited-tracking mutation
-
-The visited part of the Chunk 8 checkpoint was checked now; the return-route
-fault remains due in 8B, where return behavior will exist. Exact command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk8a_mutation_check.py
-```
-
-The actual candidate module, grid module, and unchanged candidate tests were
-copied into an isolated temporary package with no hardware adapters.
-Baseline: all ten candidate methods passed. A single deliberate fault
-changed the visited check to `if False and candidate in self._visited`,
-preventing confirmed locations from being skipped.
-
-Expected detecting test:
-`test_only_confirmed_visits_are_skipped_and_completion_is_explicit`.
-Actual result: it failed because `(1, 0)` was selected again instead of
-the next candidate `(3, 0)`. The duplicate-location test and the unreachable
-outcome test also failed. Mutant result: exit 1, three assertion failures,
-zero errors/skips; no syntax/import/infrastructure failure counted as coverage.
-No mutant survived, so no coverage repair was needed.
-
-The correct copied source was restored and all ten candidate tests passed
-again. Copied tests remained byte-for-byte unchanged, and SHA-256 checks
-confirmed all workspace source/tests were untouched by the driver. Cleanup
-was restricted to the verified system temporary root and confirmed complete.
-Driver exit: 0. The normal full worktree suite then passed as recorded above.
-No deliberate fault or mutation driver is part of the proposed commit.
-
-### Executed worked example
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.candidate_visits import CandidateVisits; from algorithms.grid_navigation import Grid; visits = CandidateVisits(Grid(5, 3, {(2, y) for y in range(3)}), [(4, 1), (1, 1)]); print('first plan:', visits.plan_next((0, 1))); print('visited before confirmation:', sorted(visits.visited)); visits.confirm_visit((1, 1)); print('visited after confirmation:', sorted(visits.visited)); print('next plan:', visits.plan_next((1, 1)))"
-```
-
-Actual output, exit 0:
-
-```text
-first plan: CandidatePlan(status='target_selected', target=(1, 1), route=((0, 1), (1, 1)), unreachable=((4, 1),))
-visited before confirmation: []
-visited after confirmation: [(1, 1)]
-next plan: CandidatePlan(status='all_unreachable', target=None, route=None, unreachable=((4, 1),))
-```
-
-The wall occupies all cells at x=2. Candidate `(4, 1)` cannot be reached
-from the left component, so `(1, 1)` is selected next. Only the explicit
-confirmation adds it to visited. The remaining target is reported as
-unreachable rather than presenting the visit sequence as successful collection.
-
-### Limitations, Git state, and next proposal
-
-This is an offline Python policy, not a complete mission controller. No
-new CLI, sensor event, collection dwell, return planning, or flight command
-was added. A confirmation trusts the supplied cell assertion; it does not
-validate measured pose, freshness, tolerances, or actual arrival. The caller
-must supply the intended static/clearance-adjusted map. Replanning may repeat
-A* calls for unreachable candidates; no reachability cache is introduced.
-Fixed-altitude suitability, map/frame alignment, localization, physical
-clearance, tracking, and the actual-start-to-route connection remain unvalidated.
-Offline tests do not establish physical flight readiness.
-
-7B and 7C were committed and pushed separately as approved before this chunk.
-Chunk 8A changes only the new policy module, its tests, and this progress
-record. They remain unstaged/uncommitted; no 8A commit or push was made.
-Existing README modifications and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Branch is
-`astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`, with
-no outgoing commits against the cached upstream. Whitespace checks cover
-tracked changes and both new files. Temporary test/mutation artifacts remain
-outside Git.
-
-Next proposed purpose: Chunk 8B will accept a simulated external detection
-event, stop selecting further candidates, and use existing A* to plan home
-from the supplied current cell. An obstructed/unreachable home route must be
-reported explicitly. Review event/return behavior before implementation,
-then test an obstacle-crossing return fault to complete the Chunk 8 checkpoint.
-Stop here for review; commit/push require separate explicit approval.
-
-### Approved 8A integration with newer remote history
-
-Before the approved commit/push, fetching origin revealed incoming commit
-`07d2a57` (`working simple astrophage collection script`). It moved the tested
-navigation modules and mission documents into `old/`, changed their imports,
-and added a separate collection/flight script. The commit gives no explanation
-for archiving the navigation work. The user explicitly chose to retain the
-offline modules under `algorithms/`.
-
-The local branch fast-forwarded to that incoming commit without rewriting
-history. Navigation modules/tests were returned to `algorithms/`, with their
-original imports and formatting; the four navigation/mission documents were
-returned to `docs/`. Unrelated archived files remain in `old/`. The incoming
-collection script, Docker changes, and already-tracked cache files are retained
-unchanged; no cache files or flight changes are added by this commit. Inspection
-found that script has its own planner and sends flight commands unless dry-run
-is selected. It was not executed or connected to this offline policy.
-
-Existing edits were saved in a local stash and an external temporary snapshot
-before fast-forwarding, then restored and checked byte for byte. The local
-stash is retained as a backup. README edits and the three document deletions
-remain outside the proposed commit. This reconciliation broadens 8A's file
-list only to preserve the explicitly requested active navigation layout.
-
-Approved Git outcome: `42e3915` (`Plan candidate visits in supplied order`)
-was committed and pushed to `origin/MAIN_collect_the_astrophage`. The push
-contained exactly that one new commit, building on incoming `07d2a57`.
-The prior pre-commit status above is retained as the original review record.
-After reconciliation, all 84 tests passed with Matplotlib; the visited-skip
-mutation again caused three assertion failures and its restored baseline passed.
-
-## Chunk 8B: simulated detection and obstacle-aware return - PASS
-
-### Purpose and changes
-
-The previously reviewed return purpose was authorized alongside the 8A push.
-The existing `CandidateVisits` policy is extended rather than introducing a
-second controller, map format, or search algorithm. The incoming collection
-script was inspected: its `plan` function plans all legs in advance, and its
-`fly` function sends commands and waits. It supplies no reusable simulated
-detection transition or candidate visit bookkeeping. It remains unchanged
-and was not run. Navigation still uses the established offline grid and A*.
-
-- `algorithms/candidate_visits.py`: constructor accepts optional keyword-only
-  `home`; `simulate_detection` accepts the explicit offline event; internal
-  current-cell validation and return planning reuse the existing grid/A*.
-  `plan_next` continues return planning once detection is accepted.
-- `algorithms/test_candidate_visits.py`: eight new return behavior tests,
-  keeping the ten existing candidate tests unchanged.
-- This progress record captures acceptance, executed tests, and limitations.
-
-### How it works
-
-Home must be an unblocked, in-bounds integer cell on the supplied grid.
-Omitting it keeps the 8A interface working, but attempting simulated detection
-without home raises `ValueError`. Invalid home is rejected at construction.
-Invalid event position is rejected before changing search state.
-
-`simulate_detection(current)` is an explicit caller assertion in an offline
-simulation, not a sensor reading. After validation it remembers that return
-was requested, cancels the pending candidate, and calls A* from the supplied
-current cell to home. It never substitutes the selected candidate for current,
-marks a new visit, or consumes hidden real/fake identity.
-
-| Status | Target | Route | Meaning |
+## Current direction and status
+
+Improve the team lead's `algorithms/astrophage_collection_script.py` directly.
+It remains the final runnable mission file; new runtime helpers belong there.
+Tests stay in `algorithms/test_astrophage_collection_script.py`. Earlier
+navigation modules are reference work, not a replacement runtime architecture.
+
+Keep grid-point coordinates: `world = origin + index * spacing`, with no
+half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
+and reactive avoidance are outside this phase. No automatic physical flight.
+The latest focused run passed 13 tests on Python 3.14.7. The mission script
+has not changed during the current test phase. Physical flight is unverified.
+
+This record summarizes completed work. The
+[full record through commit 2603fd6](https://github.com/booleansarebinary/amaze-autonomous-drone/blob/2603fd6/docs/astrophage-navigation-progress.md)
+preserves detailed historical commands, failing-test output, worked examples,
+mutation assertions, restoration evidence, and earlier review-time Git status.
+Results below are historical unless explicitly identified as newly executed.
+The older [mission](mission.md), [design plan](design-plan.md), and
+[follower design](astrophage-waypoint-follower-design.md) provide context;
+their cell-center, separate-component, and reactive proposals do not override
+the current single-script, grid-point decisions.
+
+## Earlier offline work: retained as reference
+
+These chunks concern the separate navigation modules. Their test results do
+not establish that the team lead's script or a physical drone behaves correctly.
+All listed implementation commits were approved and pushed to the mission branch.
+
+| Chunk | What changed, in plain words | Recorded passing result | Commit |
 |---|---|---|---|
-| `return_planned` | Home | Immutable cells including both endpoints | A route exists on the supplied map |
-| `return_unreachable` | Home | `None` | Valid endpoints have no connecting route |
+| 0 | Inspected instructions, Git, Docker, and Ansur's navigation before choosing reusable ideas. | Inspection only | No code commit |
+| 1 | Added a square-cell map and legal up/down/left/right neighbors in `grid_navigation.py`. | 9 tests | `72969d3` |
+| 2 | Added Manhattan distance: horizontal steps plus vertical steps. | 14 tests | `594bf3f` |
+| 3 | Added A* with best costs and predecessor links to return a shortest route. | 21 tests | `340ce02` |
+| 4 | Checked difficult routes against an independent breadth-first search. | 28 methods, including 512 map/direction comparisons | `e1b10fa` |
+| 5 | Added the earlier cell-center conversion with size and origin in meters. | 38 tests | `b6646f1` |
+| 6 | Reserved whole cells around obstacle squares and arena walls for footprint plus margin. | 48 tests | `bb582f5` |
+| 7A | Added a text-only supplied-map demonstration in `grid_demo.py`. | 57 tests | `b3f2fe9` |
+| 7B | Added optional saved route pictures in `grid_plot.py`. | 64 with plotting; 59 passed/5 skipped without it | `ebb0b2b` |
+| 7C | Added strict JSON planned-route export in `grid_export.py`. | 74 with plotting; 68 passed/6 skipped without it | `4811b39` |
+| 8A | Added supplied-order candidate selection and explicit visit confirmation in `candidate_visits.py`. | 84 with plotting; 78 passed/6 skipped without it | `42e3915` |
+| 8B | Added simulated detection that requests a fresh obstacle-aware route home. | 92 with plotting; 86 passed/6 skipped without it | `37c7934` |
+| 9 | Inspected flight interfaces and documented a future measured-position follower. No follower implementation. | Documentation only | `873ea5a` |
 
-`unreachable` remains a list of candidate locations tried during selection;
-it is empty for return results. The return status conveys home reachability.
-Blocked home is invalid input, distinct from valid but disconnected home.
+The offline model uses cardinal unit-cost movement at an assumed fixed altitude.
+Its A* includes both endpoints, distinguishes invalid inputs from no route, and
+accepts the goal when selected for expansion. Its cell-center geometry and
+whole-square inflation cannot be silently reused as grid-point geometry.
+Physical altitude suitability, localization, and first/final route connections
+remain unvalidated. Planned JSON and pictures are not measured flight data.
 
-Later `plan_next(current)` calls always plan home, including after a failed
-return. Repeated simulated events replan home without restarting search.
-There is no reset method; a fresh offline scenario uses a new policy instance.
-Previously confirmed visits remain recorded, and the canceled selection can
-no longer be confirmed. Supplied current at home produces a one-cell planned
-route; no physical-arrival, collection-complete, or landed state is inferred.
-The same original or clearance-adjusted grid is used in both directions.
+Earlier test-first failures were resolved before the recorded passing runs.
+Material fixes included decimal-contact rounding in clearance and rejection of
+nested/noninteger obstacle coordinates before CLI set construction. Plotting
+dependencies were installed only in a temporary environment. Full failure and
+fix details remain in the linked record rather than repeated here.
 
-### Acceptance criteria
+Remote commit `07d2a57` introduced the team lead's collection script and moved
+earlier navigation files into `old/`. With user approval, 8A retained that new
+script and restored the navigation modules to `algorithms/`, with documents
+under `docs/`. Unrelated archived files remained. No history was rewritten.
 
-| Criterion | Status | Evidence |
+### Recorded deliberate-fault checks
+
+Each fault was applied separately to an isolated copy of the actual code,
+with hardware excluded and tests unchanged. Correct code was restored and
+passing baselines rerun. Temporary faults/drivers were not committed.
+
+| Checkpoint | Injected faults | Recorded outcome |
 |---|---|---|
-| Use explicit simulated external detection | PASS | Dedicated simulation method; no sensor or identity fields |
-| Return starts at supplied current, not pending candidate | PASS | Detection from an intermediate cell checks exact endpoints |
-| Stop subsequent candidate selection after detection | PASS | Later planning and repeated events target home |
-| Preserve visits and invalidate pending confirmation | PASS | Confirmed set retained; canceled candidate confirmation raises |
-| Route around return obstacles with valid cardinal steps | PASS | Six-step detour checks every cell and adjacent pair |
-| Do not resume search when home is unreachable | PASS | Wall-separated home reports no route on repeated planning |
-| Distinguish invalid inputs from disconnected home | PASS | Blocked/outside/malformed home/current rejected; disconnected free home returns status |
-| Handle no candidates and supplied current at home | PASS | Empty candidate case returns home; one-cell home route tested |
-| Reuse clearance-adjusted map on return | PASS | Ten-step clearance detour avoids all excluded cells |
-| Complete return mutation checkpoint without hardware | PASS | Obstacle bypass and lost return-state faults caught by behavioral assertions |
+| 2 | Accept upper x boundary; omit vertical distance | Both caught by intended assertions; 14-test baselines restored |
+| 4 | Ignore obstacles; omit route start; refuse cheaper routes | All caught; 28-test baselines restored |
+| 4, equivalent case | Remove obsolete-queue-entry guard | Survived because returned routes are unchanged under the current model; only extra work results. No artificial assertion added |
+| 6 | Remove inflation; assume 1 m cells; ignore arena walls; omit margin | All four caught; final 48-test baselines restored |
+| 8A | Revisit confirmed candidates | Three assertion failures; 10-test baseline restored |
+| 8B | Ignore return obstacles; forget the return request | Three and four assertion failures respectively; 18-test baselines restored after each |
 
-### Test-first evidence and exact commands
+These results apply to the older modules, not the current script. No relevant
+non-equivalent survivor remained in those checks. Syntax/import/infrastructure
+failures were not counted as useful mutation detection.
 
-Eight new tests were written before the behavior. An interface-only skeleton
-accepted the optional home argument but always returned `no_targets` for the
-event and performed no home validation. Executed red command:
+## Current phase: read-only audit, Chunk -1
+
+Baseline: `873ea5a45827acb66aa1e0b1bc2e004285861738`. No files changed, fetch,
+installation, or hardware connection occurred. The audit inspected the actual
+171-line script, existing tests, documentation, and supporting cflib calls.
+
+Implemented but without focused script tests at that point: `to_cell`,
+`to_meters`, `is_blocked`, `astar`, `corners`, `plan`, `fly`, and `main`.
+The script plans grid-point routes and sends timed high-level flight commands.
+Missing: live snapshots, measured arrival, continuous-segment checks, live
+boundaries, explicit cancellation/fault handling, and mission JSONL output.
+Home is assumed zero; a sign flip does not establish coordinate alignment.
+The single 0.15 m CLEARANCE constant has no measured error-budget breakdown.
+
+Existing README changes and deleted placeholders initially blocked synchronization.
+At the user's direction, the placeholders were restored and the README was
+committed as `051f30b`. That README contains older setup instructions, not a
+verified current operator guide. The first priority was protecting useful
+script behavior with separate tests before making small fixes.
+
+## Current phase: Chunk 0 - synchronization and dependencies
+
+**Purpose:** verify the repository baseline and software interfaces without
+changing runtime code, installing dependencies, or connecting to hardware.
+
+The clean worktree was `C:/Users/victo/amaze-hula-hoop`, on local branch
+`astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`.
+Verified origin: `https://github.com/booleansarebinary/amaze-autonomous-drone.git`.
+
+`git fetch origin` succeeded. Fetched mission tip was
+`873ea5a45827acb66aa1e0b1bc2e004285861738`; local HEAD was
+`051f30babb777f8c9b94a9027ae29b28a90d0ed0`. The comparison command below returned
+`1 0`: one local README commit, no incoming mission commits. No fast-forward
+was needed, no divergence existed, and the audited script findings were unchanged.
 
 ```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_candidate_visits -q
+git rev-list --left-right --count HEAD...origin/MAIN_collect_the_astrophage
 ```
 
-Result: exit 1, 18 methods total, 14 behavioral assertion failures including
-subtests, zero errors/skips. The ten original candidate methods still passed.
-The implementation resolved these failures; the same command passed all 18.
-
-Full commands after mutation restoration:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
-$env:MPLCONFIGDIR='C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-cache-7b'
-& C:\Users\victo\AppData\Local\Temp\astrophage-grid-plot-7b\Scripts\python.exe -B -m unittest algorithms.test_grid_navigation algorithms.test_grid_demo algorithms.test_grid_plot algorithms.test_grid_export algorithms.test_candidate_visits -q
-```
-
-Without plotting: exit 0, 92 methods total, 86 passed, six optional image tests
-skipped, zero failures/errors. With plotting: exit 0, all 92 passed, zero
-failures/errors/skips. No dependency installation or Docker/hardware run.
-
-### Controlled mutations
-
-Exact command, with the driver kept outside the repository:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B C:\Users\victo\AppData\Local\Temp\astrophage_chunk8b_mutation_check.py
-```
-
-The actual policy, grid, and unchanged candidate tests were copied into an
-isolated temporary package containing no hardware adapters. Baseline: all 18
-passed. Faults were introduced one at a time into the copied implementation:
-
-| Injected fault | Intended detecting test | Actual outcome |
+| Dependency or interface | Observed state | Remaining action |
 |---|---|---|
-| Return A* receives an empty grid with the same dimensions, ignoring obstacles | `test_return_detours_around_obstacle_with_valid_unit_steps` | Fails because a returned cell is blocked; clearance and unreachable-home tests also fail (three assertion failures) |
-| Detection sets the remembered return request to false | `test_detection_plans_home_from_supplied_current_not_selected_target` | Fails because later planning selects a candidate; three other return-state assertions also fail (four failures) |
-
-Each mutant exited 1 with behavioral assertion failures, no errors/skips.
-Correct source was restored after each, and all 18 tests passed after each
-restoration. No survivor or equivalent mutant required coverage repair.
-Copied tests were unchanged, SHA-256 checks proved workspace files unchanged,
-and the temporary copy was removed. Driver exited 0. The normal full suites
-then passed as recorded above. Together with 8A's visited-tracking check,
-these results complete the Chunk 8 checkpoint; no deliberate faults are tracked.
-
-### Executed worked example
-
-Exact command:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms.candidate_visits import CandidateVisits; from algorithms.grid_navigation import Grid; visits=CandidateVisits(Grid(5,3,{(2,1)}),[(4,2)],home=(0,1)); print('search:',visits.plan_next((4,1))); print('detection:',visits.simulate_detection((4,1))); print('next:',visits.plan_next((3,2))); print('visited:',sorted(visits.visited)); wall=CandidateVisits(Grid(5,3,{(2,y) for y in range(3)}),[(4,2)],home=(0,1)); print('wall:',wall.simulate_detection((4,1)))"
-```
-
-Actual output, exit 0:
-
-```text
-search: CandidatePlan(status='target_selected', target=(4, 2), route=((4, 1), (4, 2)), unreachable=())
-detection: CandidatePlan(status='return_planned', target=(0, 1), route=((4, 1), (3, 1), (3, 2), (2, 2), (1, 2), (0, 2), (0, 1)), unreachable=())
-next: CandidatePlan(status='return_planned', target=(0, 1), route=((3, 2), (2, 2), (1, 2), (0, 2), (0, 1)), unreachable=())
-visited: []
-wall: CandidatePlan(status='return_unreachable', target=(0, 1), route=None, unreachable=())
-```
-
-The first return takes six steps around blocked `(2, 1)` rather than four
-through it. A later supplied position replans home instead of targeting the
-candidate. A complete wall at x=2 makes home unreachable. These are actual
-executed offline planning outputs; positions and events are simulated inputs.
-
-### Limitations, Git state, and next proposed purpose
-
-This adds neither real sensor validation nor hold/collection dwell. There is
-no command ownership, localization freshness, flight/landing, or integration
-with the new physical collection script. The caller supplies static map,
-home, and current cells. Invalid current is rejected without resuming search.
-Fixed-altitude suitability, localization, map alignment, clearance values,
-and the physical-start-to-first-waypoint connection require validation before
-physical use. Offline route tests do not establish physical flight readiness.
-
-8A is committed and pushed as `42e3915`; 8B modifies only the policy, its tests,
-and this record. All 8B changes remain unstaged/uncommitted and were not pushed.
-Existing README edits and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` are preserved and excluded.
-No outgoing commits remain. The preservation stash and external snapshot are
-retained; logs, mutation driver/copies, and plotting caches remain outside commits.
-
-Next proposed chunk is Chunk 9, design only: inspect the actual command and
-measured-position interfaces, then explain waypoint tolerances, stale-position
-handling, command ownership with reactive avoidance, and requirements for the
-connection from measured start to the first waypoint and physical testing.
-Review that purpose before beginning. No implementation, radio, or flight
-commands are authorized by that design proposal. Stop here for 8B review.
-
-Subsequent approved Git outcome: 8B was committed as `37c7934`
-(`Plan obstacle-aware returns after simulated detection`) and pushed alone to
-`origin/MAIN_collect_the_astrophage`. No additional behavior was added during
-that commit/push. The preceding uncommitted status describes the original review.
-
-## Chunk 9: waypoint-follower design only - COMPLETE FOR REVIEW
-
-### Purpose, scope, and files
-
-After reviewing the design-only purpose, the user authorized continuation.
-This chunk inspects the actual command and localization interfaces and records
-how a later measured-position follower could consume the existing routes.
-No production functions, tests, flight commands, or dependencies were changed.
-
-- Added `docs/astrophage-waypoint-follower-design.md`: source findings,
-  coordinate and first-movement requirements, proposed feedback loop,
-  arrival criteria, stale-data handling, command ownership, and physical gates.
-- Updated this engineering record with inspection evidence and review status.
-- Recorded 8B's approved commit/push above; unrelated local edits are preserved.
-
-The mission and design documents were reread. Their future physical collection
-requirements still apply; the user's offline-first priority supersedes their
-earlier sensor-first ordering. No branch recreation or hardware stage was run.
-
-### Inspection evidence and reuse decisions
-
-Read the current `astrophage_collection_script.py`, `candidate_visits.py`, and
-`grid_navigation.py`. Also read Ansur's sibling `reactive_nav.py` controller
-and flight/telemetry loop and the locally installed cflib source and metadata.
-No applicable AGENTS.md was found in the inspected ancestor/repository paths.
-
-Representative exact inspection commands, run from this worktree:
-
-```powershell
-Get-Content algorithms/astrophage_collection_script.py
-Get-Content C:\Users\victo\amaze-test-flight\algorithms\reactive_nav.py | Select-Object -Skip 819 -First 150
-Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\positioning\position_hl_commander.py | Select-Object -Skip 228 -First 57
-Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\crazyflie\high_level_commander.py | Select-Object -Skip 128 -First 53
-Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\positioning\motion_commander.py | Select-Object -Skip 325 -First 92
-Get-Content C:\Users\victo\amaze-test-flight\.venv\Lib\site-packages\cflib\utils\reset_estimator.py
-```
-
-All these source reads succeeded. Findings are limited to inspected local
-cflib 0.1.33 and this repository state; firmware compatibility is not established.
-An initial `rg` invocation with a wildcard directory in its literal path failed
-with Windows error 123. Enumerating `cflib*.dist-info` using `Get-ChildItem` and
-reading its METADATA resolved the lookup and confirmed version 0.1.33.
-
-Reuse the tested grid, A*, conversions, clearance map, and candidate policy.
-For future adapter design, existing nonblocking MotionCommander-style requests
-offer an interruptible command family. Reuse of that library does not validate
-its physical pause behavior or authorize creating its takeoff/landing context.
-Ansur's pure controller is a possible later avoidance input; its flight loop
-is not an additional command owner and is not imported into the offline policy.
-
-Important findings documented in the design:
-
-- `PositionHlCommander.go_to` waits calculated time, then updates remembered
-  coordinates. `get_position` returns those coordinates, not measured arrival.
-- High-level `go_to` may generate curves from nonzero velocity; straight grid
-  steps do not prove that trajectory stays within the planned region.
-- High-level `stop` turns motors off; MotionCommander `stop` requests zero
-  velocity. Neither name alone establishes a validated fault/hover response.
-- The reactive log callback ignores device time, initially has zero estimates,
-  lacks freshness checks and altitude in that log block. Variable semantics
-  and firmware availability remain to be verified.
-- The collection script uses grid points and a y-flip, while the offline map
-  uses cell centers. A deliberate frame conversion is required before reuse.
-- Resetting the estimator and observing stable variance do not establish map
-  origin/alignment, measured absolute accuracy, or bounded localization drift.
-
-### How the proposed follower would work
-
-Convert the supplied route into centers with existing GridCoordinates, after
-registering map and measured-pose frames. Check the continuous connection from
-actual pose to the first center. Follow one waypoint at a time using fresh,
-coherent position/velocity/altitude/yaw, limiting motion within the validated
-route region. Advance only after position, height, and speed satisfy configured
-limits continuously; repeated old samples cannot confirm arrival.
-
-One mission-owned adapter sends commands. Candidate/return routing and any
-future reactive component supply intentions, not competing command loops.
-Stale pose or a fault cancels travel intent, resets settling, and invokes a
-separately validated response. Reacquisition requires route/frame revalidation.
-No host command is assumed to arrive after radio loss. A canceled route cannot
-later regain ownership by completing an old timer or background command.
-
-This is proposed behavior, not an implemented follower. Simulated detection
-currently switches route planning to home immediately. Real collection must
-later distinguish search cancellation, hold, verified settling, collection
-dwell, authorized return, arrival, and landing.
-
-### Hypothetical worked example
-
-The design includes a hand-calculated example, not an executed follower:
-5-by-4 grid, blocked `(2,1)`, size 0.25 m, origin `(0,0)`, and supplied route
-`[(1,1),(1,2),(2,2),(3,2)]` convert to centers
-`[(0.375,0.375),(0.375,0.625),(0.625,0.625),(0.875,0.625)]` meters.
-Hypothetical measured `(0.38,0.39)` is about 0.016 m from the first center.
-With illustrative tolerance 0.04 m, a 0.30 s qualifying settling interval,
-and age limit 0.15 s, fresh settled evidence would allow the next segment;
-a 0.20 s-old sample would pause it. Velocity/height criteria and the checked
-continuous connection are also required. These numbers are not flight settings.
-
-### Acceptance criteria and verification
-
-| Criterion | Status | Evidence |
-|---|---|---|
-| Inspect actual command and localization interfaces | PASS | Current script, reactive adapter, installed commander/reset sources and package metadata read |
-| Reuse routes and distinguish measured pose from command targets | PASS | Existing components retained; timed commander coordinates explicitly excluded as arrival evidence |
-| Specify tolerances and stale-localization behavior | PASS AS DESIGN | Continuous position/height/speed settling; sample age/order/reset and explicit reacquisition requirements |
-| Explain sole command ownership and reactive interaction | PASS AS DESIGN | Single adapter, route revocation, avoidance cannot independently send or bypass mapped obstacles |
-| Identify unchecked actual-start connection | PASS | Pose-to-first-center check, offset/frame mismatch, turns and final home connection called out |
-| Document physical validation requirements | PASS AS DESIGN | Telemetry, fixed-altitude volume, localization, clearance/tracking/braking, link-loss/operator evidence pending |
-| Keep chunk design only, with no hardware claims | PASS | Only two documentation files changed; no imports/execution of flight interfaces |
-
-Implementation tests: NOT APPLICABLE. No test files were added or executed;
-there is no follower implementation to demonstrate failing/passing behavior.
-Mutation checks: NOT APPLICABLE for design only. The prior 8B suite's 92 passing
-tests are historical planner/policy evidence, not evidence for this design.
-Documentation verification uses `git diff --check` on the progress record and
-`git diff --no-index --check -- NUL docs/astrophage-waypoint-follower-design.md`
-on the new file. Checked individually, the tracked-file check exited 0;
-the no-index check exited 1 because the new file differs from NUL. Neither
-reported whitespace errors (only Git's existing LF-to-CRLF conversion warning).
-The new-file difference exit is not a failed implementation test.
-
-### Remaining limitations, Git state, and next proposal
-
-All follower behavior remains unimplemented. Numeric settings, actual firmware
-log variables/units, estimator quality, safe command interruption, physical
-frame alignment, fixed-altitude validity, first/final connections, and command
-ownership need offline tests and later physical validation. Offline A* results
-do not establish physical flight readiness. No hardware evidence was collected.
-
-Chunk 9 remains unstaged/uncommitted; nothing was committed or pushed this turn.
-Branch is `astrophage-collection`, tracking `origin/MAIN_collect_the_astrophage`;
-HEAD is the pushed 8B commit `37c7934`, with no outgoing commits against cached
-origin. Existing README changes and deletions of `docs/architecture.md`,
-`docs/decisions.md`, and `docs/pr_walkthrough.md` remain untouched. Temporary
-artifacts and the earlier preservation stash are not staged.
-
-This completes the requested chunks through the Chunk 9 design review. A
-possible next small chunk, requiring purpose review and authorization, is an
-offline coherent-pose/freshness gate with a fake clock and no cflib import.
-It would distinguish no sample, valid fresh sample, and invalid/stale sample,
-without movement or waypoint-following yet. No further chunk is started.
-
-## Plain-language recap of every chunk
-
-This recap describes what was built or inspected, not what a drone has proved
-it can do. Maps, starting positions, and candidate locations are supplied by
-a person. No hidden real/fake label is used to choose where to go.
-
-| Chunk | What it did, in plain terms |
-|---|---|
-| 0 - Look at the project first | Read the instructions, mission plans, existing navigation, tests, Docker setup, and Git state. Decided which existing ideas to reuse. Changed no files. |
-| 1 - Make a square-cell map | Represented the map as rows and columns of cells. Marked blocked cells and found legal moves up, down, left, and right. Defined each location as `(x, y)`. |
-| 2 - Estimate remaining steps | Added the number of horizontal steps plus vertical steps to the goal, ignoring obstacles. This helps the search decide what to try first. |
-| 3 - Find a complete route | Added A*: a search that finds a shortest route around blocked cells. It remembers how it reached each cell so it can return the full route. |
-| 4 - Check difficult cases | Checked bad inputs, impossible routes, tight passages, and different map shapes. Compared route lengths with a separate simple search. Deliberately broke parts of the planner to check that tests noticed. |
-| 5 - Turn cells into meters | Added cell size and map origin so a cell can be converted to its center in meters, and a meter position can be placed in its containing cell. This sets a coordinate convention; it does not measure the room or drone. |
-| 6 - Leave space around obstacles | Made extra cells unavailable near obstacles and map edges to leave room for the drone and an extra allowance. Those sizes still need real measurements. |
-| 7A - Show a route in the terminal | Added a command-line demo that reads a supplied map and prints the planned route using text symbols. It also reports when no route exists. |
-| 7B - Save a picture | Added an optional picture showing obstacles, extra reserved space, start, goal, and planned route. It is a plan, not a picture of measured flight. |
-| 7C - Save the plan as data | Added JSON output: a structured text file containing the route, map, and planning settings so other tools can read them. |
-| 8A - Choose which candidate to visit | Tries candidates in the supplied order, skips locations already confirmed visited, and reports unreachable locations. Planning a visit does not mark it completed. |
-| 8B - Plan home after simulated detection | An explicit simulated detection stops choosing candidates. A* calculates a fresh route from the supplied current cell to home. It does not replay the outbound route or move the drone. |
-| 9 - Design how to follow a route | Inspected the real command interfaces and wrote down how a future follower must check measured position, arrival, old data, and who can send movement commands. No follower was implemented. |
-
-The result so far is a tested offline route planner, a small candidate/return
-policy, demos, saved plans, and a follower design. The latest executed
-implementation suite passed all 92 tests with plotting installed. Without
-plotting, 86 passed and six optional picture tests were skipped. Deliberate
-fault checks are recorded above. These results do not demonstrate physical
-flight, sensor detection, collection, or a complete hardware mission.
-
-## Current design problems and missing pieces
-
-1. **A route is not a working flight follower.** The offline code returns
-   locations to visit. Nothing in that code checks live drone position and
-   moves between those locations. The separate collection script sends flight
-   commands, but waits a calculated time rather than checking measured arrival.
-   Its remembered destination must not be used as proof of where the drone is.
-
-2. **The two navigation paths are not connected.** The collection script has
-   its own planner and coordinate rules. The tested offline planner uses cell
-   centers; the script uses grid points and flips one axis. We need one agreed
-   route-to-command connection using the tested components, with explicit
-   conversions. Do not combine the two by passing coordinates straight across.
-
-3. **We have not proved that the map matches the drone's position readings.**
-   The origin, axis directions, heading, units, and height reference must agree.
-   We also need to measure how far position readings can be wrong or drift
-   over time. Resetting the position estimator does not prove this agreement.
-
-4. **Some actual movements have never been checked.** Getting from the actual
-   start to the first cell center, turning between waypoints, and moving from
-   the home cell center to the exact takeoff point all need collision checks.
-   So do takeoff and landing. A list of free cells does not prove that a curved
-   movement or an overshoot will stay clear of obstacles.
-
-5. **The map and space allowances are assumptions.** The map is static and
-   does not discover new obstacles. A flat map works only if the chosen flying
-   height is clear along the whole route. Drone size, position error, stopping
-   distance, and tracking error need measured allowances. The current planner
-   can also reject usable narrow routes because it reserves whole cells.
-
-6. **Arrival and failure rules are not implemented.** We must define how close
-   is close enough, how slowly the drone must be moving, and how long it must
-   stay settled. We must reject missing, old, repeated, or invalid position
-   readings. Loss of position or radio needs a tested response. A command
-   called `stop` cannot be assumed to hover: the inspected high-level version
-   turns motors off. A radio-loss command cannot be assumed to arrive.
-
-7. **Only one part of the system may control movement at a time.** Candidate
-   travel, return travel, reactive obstacle avoidance, collection hold, and
-   operator intervention need one shared command owner. Canceling a route
-   must prevent its old commands from running later. Reactive avoidance is
-   currently separate and requires sensor data that this offline work does
-   not provide. Running both existing flight loops together is not integration.
-
-8. **Simulated detection leaves out real collection.** Today a supplied event
-   switches planning straight to home. The physical mission needs separate
-   stages: stop searching, check the detection, settle above the station,
-   stay there for the collection time, record collection once, then return.
-   Planning a return cannot count as completing collection or getting home.
-
-9. **The sensor connection and its reliability are still unresolved.** We need
-   the actual sensor and board details, valid wiring, message format, timing,
-   station identity, and handling for missing or repeated messages. An
-   ultrasonic reading says something is in its beam; it does not by itself
-   prove that the drone is correctly centered at the right station. We must
-   measure missed detections, false detections, and delays, including whether
-   readings remain useful with the drone flying.
-
-## What must be resolved before the combined hardware mission
-
-These are proposed steps for later review, not authorization to connect or fly
-hardware. We can build and check the missing software with fake inputs first.
-
-1. **Finish the movement logic offline.** Use made-up position samples and a
-   fake command receiver to check fresh data, coordinate conversions, first
-   movement, waypoint arrival, route cancellation, obstacle checks, and return.
-   Check failures as well as success. Deliberately break important checks and
-   confirm that the tests catch the mistakes before restoring correct code.
-
-2. **Settle how the existing pieces fit together.** Choose the tested planner
-   and one command owner as the integration path. Decide how the collection
-   script will reuse that path, how reactive avoidance may interrupt it, and
-   how the operator can take control. Do not leave two independent movement
-   loops sending commands to the same drone.
-
-3. **Check the sensor on its own.** Identify the board and sensor, verify their
-   electrical requirements, read real measurements in a terminal, and test
-   their useful height and offset range. Define a message format that lets
-   the computer reject bad, old, duplicate, or wrong-station events. Measure
-   errors and delays; do not choose thresholds from guesses alone.
-
-4. **Check drone position data without flight.** Discover the actual firmware
-   fields and units, read position, speed, heading, and height, and check their
-   timing and quality. Confirm which positioning hardware is present. Do not
-   treat zeros, remembered commands, or a detected deck as usable live position.
-   This step must not enter a commander context that automatically takes off.
-
-5. **Measure and align the physical setup.** Establish map origin and axes,
-   check position accuracy and drift, measure the drone and available space,
-   and confirm that one flying height is suitable. Choose clearance, speed,
-   braking, arrival, and stale-data limits from evidence. Check first/final
-   connections and the vertical takeoff/landing space separately.
-
-6. **Define and validate failure handling before autonomous flight.** Establish
-   what happens on old position readings, sensor loss, radio loss, no route,
-   unexpected obstacles, and operator cancellation. Check the drone firmware's
-   own behavior when commands stop arriving. A host-side pause request is not
-   a complete failure plan.
-
-7. **Build the collection sequence and then validate it in controlled stages.**
-   First test detection, settling, collection time, one collection record,
-   and return using fake inputs. Later, under a separately approved physical
-   plan, check short movements and measured arrival, then collection hold,
-   sensor performance during flight, and an obstacle-aware outbound/return.
-   Record planned positions separately from measured positions and record
-   failed trials as well as successful ones.
-
-The current work provides no evidence that these physical checks have passed.
-The full mission remains pending until the sensor, localization, movement,
-collection, and return work together with measured results.
-
-This recap and the Chunk 9 design are documentation only. No additional tests
-or mutations were invented for this edit. Earlier Git status statements are
-review-time snapshots; the requested documentation commit/push is subsequent
-to those snapshots. Only this progress record and the follower design belong
-to that change; the existing README edits and three document deletions remain
-excluded. Detailed command-interface findings are in
-[the follower design](astrophage-waypoint-follower-design.md).
-
-## Team-lead script phase: audit and Chunk 0 synchronization
-
-### Current implementation decision
-
-This phase improves `algorithms/astrophage_collection_script.py` directly.
-That file remains the final runnable mission script and contains all new
-mission runtime helpers. Focused tests will live separately in
-`algorithms/test_astrophage_collection_script.py`. Existing navigation modules
-and their tests may inform changes but will not replace the team lead's script.
-No new runtime architecture, reactive avoidance, ultrasound, or frontend is
-planned in this phase. Earlier cell-center and separate-component proposals
-in this record and the follower design are historical, not current geometry
-or file-layout decisions. The script's grid-point convention is retained.
-
-### Initial read-only audit: Chunk -1
-
-The local audit baseline was `873ea5a45827acb66aa1e0b1bc2e004285861738`.
-The current 171-line script provides point conversion, point-to-rectangle
-clearance checks, cardinal A*, corner reduction, target/home legs, route
-printing, a dry-run option, and a timed high-level flight sequence.
-
-No focused tests for this script were found. Earlier 92-test results concern
-the separate navigation modules and do not establish this script's behavior.
-The script does not read live position snapshots or verify measured arrival.
-Its clearance checks do not check continuous segments or reserve space at
-arena walls. Home is assumed to be zero. Rounding can change a target without
-reporting the adjustment. There is no measured route/boundary monitor, explicit
-cancellation/fault policy, or versioned mission JSONL output.
-
-The audit changed no files, fetched nothing, installed nothing, and opened no
-hardware connection. Its report was supplied in conversation. Initial local
-README changes and three missing placeholder documents blocked synchronization.
-At the user's explicit direction, the three original placeholders were restored
-and the existing README was committed separately as `051f30b`
-(`Save existing README setup notes`). That commit was not pushed. Its older
-paths and Docker instructions remain unverified; this chunk does not rewrite it.
-
-### Chunk 0: verified remote comparison
-
-Purpose: verify repository history and dependency/interface facts before adding
-tests or modifying runtime behavior. The user authorized fetch and safe
-fast-forward synchronization. The worktree was clean before fetching.
-
-- Working directory: `C:/Users/victo/amaze-hula-hoop`.
-- Local branch: `astrophage-collection`.
-- Upstream: `origin/MAIN_collect_the_astrophage`.
-- Verified origin: `https://github.com/booleansarebinary/amaze-autonomous-drone.git`.
-- `git fetch origin` succeeded, exit 0. Other remote branch references advanced;
-  the mission branch did not. No other branch was merged or checked out.
-- Fetched mission tip: `873ea5a45827acb66aa1e0b1bc2e004285861738`.
-- Verified local baseline: `051f30babb777f8c9b94a9027ae29b28a90d0ed0`.
-- `git rev-list --left-right --count HEAD...origin/MAIN_collect_the_astrophage`
-  returned `1 0`: one local README commit and no incoming commits.
-
-All fetched mission history is already included locally, so no fast-forward
-operation was needed. There is no divergence. The only local committed
-difference from the mission remote is README.md. The mission script,
-dependencies, and Docker configuration have no differences from that remote,
-so incoming changes require no revision of the initial script audit.
-
-### Dependency and command-interface findings
-
-| Component | Actual observation | Meaning and next action |
-|---|---|---|
-| Python selection | Project requires >=3.10; `.python-version` selects 3.10; no worktree `.venv` | Project-local setup remains pending; do not silently change the selected interpreter |
-| Available environment | Sibling `amaze-test-flight/.venv` runs Python 3.14.7 | Usable for the executed inspection; not the project's selected 3.10 environment |
-| cflib | Installed 0.1.33; lockfile selects 0.1.33 | Source/API inspection possible; actual firmware compatibility still unknown |
-| Required packages | PyUSB 1.3.1, libusb-package 1.0.30.0, NumPy 2.5.3, SciPy 1.18.1, packaging 25.0, PyYAML 6.0.3 | All imported successfully in the sibling environment |
-| USB backend | libusb0, default libusb1, and OpenUSB return no backend; explicitly packaged libusb1 loads | Default radio backend loading needs a reviewed fix; no dependency was installed or patched |
-| Present USB hardware | Windows enumeration succeeded; no matching Crazyradio `1915:7777` device | Radio access/driver and physical positioning hardware remain unverified |
-| Docker | Client 29.8.0 present; Linux-engine pipe unavailable, exit 1 | No container was started; native Windows is the proposed initial path |
-| Command tools | `uv` and `usbipd` not found on PATH | Setup is pending; no tool was installed |
-| Firmware/decks | No connection opened | No firmware identity, live field meaning, positioning capability, or flight result claimed |
-
-The installed PositionHlCommander go_to method sleeps for calculated travel
-time and updates remembered coordinates; get_position returns those coordinates.
-It is not measured arrival. Its context takes off and lands automatically;
-selecting CONTROLLER_PID can write a controller parameter at construction.
-The estimator-reset helper writes reset parameters and checks variance history,
-not map alignment or absolute accuracy.
-
-MotionCommander has automatic takeoff/reset/landing and a background hover
-sender with a default 0.2-second update period. Direct body-frame hover and
-world-frame velocity APIs are available, but firmware support and usable
-measurements must be verified before selecting the flight command family.
-High-level stop and send_stop_setpoint turn motors off; neither means hold.
-Crazyflie.close_link sends a zero-thrust setpoint before closing an open link,
-so strict telemetry-only cleanup needs explicit testing of that hidden call.
-No commander object, radio scan, estimator reset, arming, or flight was invoked.
-
-### Acceptance and executed checks
-
-| Criterion | Result |
-|---|---|
-| Verify directory, branch, origin, upstream and clean pre-fetch state | PASS |
-| Fetch verified remote and synchronize only when safe | PASS: fetch succeeded; all mission history already included; no merge needed |
-| Preserve the approved local README commit and placeholders | PASS: no reset, stash, discard, branch replacement or push |
-| Recheck findings affected by incoming changes | PASS: no incoming mission changes; script findings unchanged |
-| Inspect dependencies and library lifecycle without hardware connection | PASS: imports/backend probes and source inspection only; hardware facts remain pending |
-| Keep runtime and tests unchanged | PASS: only this progress record is edited |
-
-Exact import-check command, exit 0:
+| Python | Project selects 3.10, requires >=3.10, and has no local `.venv`; inspected sibling environment runs 3.14.7 | Establish a reproducible project environment separately |
+| cflib | Installed and locked at 0.1.33 | Verify against actual firmware later |
+| Required packages | PyUSB 1.3.1, libusb-package 1.0.30.0, NumPy 2.5.3, SciPy 1.18.1, packaging 25.0, PyYAML 6.0.3; imports passed | No installation performed |
+| USB backend | Default libusb0/libusb1/OpenUSB unavailable; explicitly packaged libusb1 loads | Resolve default radio backend loading in a reviewed change |
+| USB hardware | Windows enumeration found no matching Crazyradio `1915:7777` | Driver, firmware, decks and usable localization remain unverified |
+| Docker/tools | Client 29.8.0 present; engine unavailable; uv/usbipd not on PATH | Native Windows is the initial proposed path; setup still pending |
+
+Exact successful import check, exit 0:
 
 ```powershell
 & C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "import sys,cflib,usb,numpy,scipy,packaging,yaml,libusb_package; print('Dependency imports passed'); print('Python:',sys.version.split()[0])"
 ```
 
-Actual output was `Dependency imports passed` and `Python: 3.14.7`.
-Backend-loading probes were separate software checks, not USB/radio access.
-Docker check command, exit 1:
+It printed `Dependency imports passed` and `Python: 3.14.7`.
+`docker version --format '{{.Client.Version}} {{if .Server}}{{.Server.Version}}{{end}}'`
+exited 1 because the Linux-engine pipe was unavailable. Missing optional tool
+lookups also returned 1; these were not failed Python imports or mission tests.
+No software/backend fix was attempted. Hardware facts remain pending.
 
-```powershell
-docker version --format '{{.Client.Version}} {{if .Server}}{{.Server.Version}}{{end}}'
-```
+Library findings: PositionHlCommander waits estimated travel time and remembers
+targets; it does not confirm arrival. Its context takes off/lands automatically,
+and controller selection can write a parameter during construction.
+MotionCommander resets the estimator on takeoff and repeats hover requests in
+a background sender, default 0.2 s. Motor-stop APIs are not hover. Ordinary
+Crazyflie.close_link sends a zero-thrust setpoint, which strict telemetry-only
+cleanup must address. A reset is not proof of map alignment. The final command
+family remains conditional on actual firmware and positioning capability.
 
-It printed client 29.8.0 and reported that the Docker Desktop Linux-engine
-pipe did not exist. No attempt was made to start or repair Docker. Optional
-Get-Command lookup returned no uv/usbipd and ended that combined inspection
-command with exit 1; that is not a failed Python import or mission test.
-Documentation verification: `git diff --check -- docs/astrophage-navigation-progress.md`
-passed with no whitespace errors. Implementation tests and deliberate mutation
-checks are NOT APPLICABLE to this inspection chunk and were not run.
+**Acceptance:** PASS for directory/branch/remote verification, safe fetched
+history comparison, preservation of local work, unchanged audit findings,
+dependency/API inspection without connection, and no runtime/test edits.
+Implementation tests and mutations: not applicable. Whitespace check passed.
 
-Worked example using the actual Git result: `1 0` means the remote contributes
-zero commits missing locally, while the local README commit is not on the
-remote. This is why no pull/merge or push was performed.
+**Git outcome:** `f298b1b` recorded this audit. The existing README push needed
+separate approval; after approval, `051f30b` and then `f298b1b` were pushed
+separately, one new commit per push. No reset, stash, or history rewrite.
 
-### Remaining work, next proposed chunk, and Git status
+**Plain-language recap:** We checked which code and tools we had before changing
+anything. GitHub had no new mission code to bring in. Some software and hardware
+requirements are still unresolved, and we did not connect to or fly the drone.
 
-All eight existing functions can retain their names and basic structure:
-to_cell, to_meters, is_blocked, astar, corners, plan, fly, and main. Their missing
-validation and measured-execution behavior will be handled in small reviewed
-changes. No function contract changed here.
+## Milestone 1A - grid-point conversion tests
 
-Next proposed purpose: conversion characterization tests only, in the separate
-test file named above, with no production changes. Check grid-point round trips,
-distinct x/y axes, configured origin/spacing, absence of a half-cell offset, and
-the existing nearest-point rounding behavior. These tests protect existing
-useful behavior; no artificial failing implementation will be introduced.
-For example, with zero origin and spacing 0.1 m, point `(3,2)` corresponds to
-approximately `(0.3,0.2)` meters. This is a hypothetical test example, not an
-executed mission result. Invalid-input fixes and full planning/dry-run tests
-remain separate later chunks, as do dependency setup and hardware verification.
+**Purpose/files:** add seven GridPointConversionTests to
+`algorithms/test_astrophage_collection_script.py`, plus this record.
+Exercise `to_cell` and `to_meters`; keep the production script unchanged.
 
-Only this progress file is uncommitted for Chunk 0; it remains unstaged.
-No new commit or push was made. The sole existing outgoing commit is the
-approved local README commit `051f30b`, whose push has not been authorized.
-Any future push must review that outgoing history separately. No operator
-guide is advertised as runnable before its features and prerequisites exist.
-Stop here for review before writing the first tests.
+**Acceptance results - all PASS:**
 
-Subsequent approved Git outcome: the user approved committing/pushing this
-record and continuing to conversion tests. The record was committed as
-`f298b1b` (`Record mission script audit and synchronization baseline`). Outgoing
-history also contained the earlier README commit, whose push had not yet been
-approved. Pushes paused until the user explicitly approved both separate
-pushes. `051f30b` was then pushed first and `f298b1b` second, each adding one
-commit to `origin/MAIN_collect_the_astrophage`. No history was rewritten.
+- Zero point equals origin, without a half-cell offset.
+- X/y remain distinct; configured origin and spacing apply to both axes.
+- All 45 points in a rectangular example round-trip correctly.
+- Between-point requests select the nearest point; negative meter positions work.
+- Binary-exact halfway cases document Python's current ties-to-even rounding.
+- Tests remain separate and execute only pure conversion functions.
 
-## Team-lead script phase: Milestone 1A - grid-point conversion tests
+Test settings are changed temporarily in memory with unittest.mock.patch and
+restored after each test. No files are edited by that configuration substitution.
+These characterization tests passed existing behavior immediately; no artificial
+failing baseline or production fix was needed. They do not endorse every current
+input or physical assumption. Mutations were not due for this small test chunk.
 
-### Purpose and changes
-
-The conversion-test purpose was reviewed before continuation. This small chunk
-protects useful existing behavior in the team lead's actual runnable script.
-It does not change coordinates, planning, command behavior, or dependencies.
-
-- Added `algorithms/test_astrophage_collection_script.py`: seven focused
-  `GridPointConversionTests` using standard-library unittest.
-- Updated this existing progress record with results and remaining scope.
-- `algorithms/astrophage_collection_script.py` has no changes. All new mission
-  runtime behavior will continue to belong in that script, with tests separate.
-
-The tests cover the existing `to_cell` and `to_meters` functions directly.
-`unittest.mock.patch` temporarily supplies test AREA/CELL values in memory;
-cleanup restores their previous values after each test. No configuration file
-or runtime source is edited. `subTest` labels individual round-trip examples
-so a failure identifies which grid point was involved. Python's `*` before a
-coordinate pair passes its two values as separate function arguments.
-
-### Acceptance criteria and individual results
-
-| Criterion | Result and evidence |
-|---|---|
-| Keep tests separate from the final runtime script | PASS: only a new test file and this record change |
-| Keep grid-point geometry without a half-cell offset | PASS: index `(0,0)` converts to the origin itself |
-| Preserve distinct x/y axes | PASS: point `(3,2)` converts to approximately `(0.3,0.2)` meters and back |
-| Honor configured origin and spacing | PASS: origin `(-1,0.5)` and spacing 0.25 convert `(3,2)` to `(-0.25,1.0)` |
-| Round-trip points across a rectangular example | PASS: 45 points, including the upper corner, checked with exact binary spacing |
-| Characterize snapping between points | PASS: requested `(0.26,0.34)` selects `(3,3)`, which differs from the exact request |
-| Make existing halfway rounding explicit | PASS: with spacing 0.5, `(0.25,0.75)` maps to `(0,2)` and `(1.25,1.75)` to `(2,4)` |
-| Support negative meter positions relative to the supplied origin | PASS: origin `(-1,-2)`, spacing 0.5, request `(-0.74,-1.24)` maps to `(1,2)` |
-| Exercise pure conversion without hardware | PASS: no fly/main call, cflib initialization, connection, or commander context |
-
-These are characterization tests: they record selected useful behavior that
-already exists. They were written before any proposed conversion change, and
-passed the existing implementation immediately. No runtime implementation was
-needed and no failing baseline was manufactured. Existing Python rounding at
-ties is documented, not claimed to be a physically validated target policy.
-
-### Exact executed command and actual result
-
-From the mission worktree root:
+Exact test command used for both 1A and 1B, from the worktree root:
 
 ```powershell
 & C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v
 ```
 
-Actual result: exit 0, seven tests passed, zero failures/errors/skips, using
-Python 3.14.7. The rectangular test checks 45 point cases within one method;
-those cases are not counted as 45 separate methods. No dependency was installed.
-Project-selected Python 3.10 compatibility was not executed. Existing unrelated
-navigation suites were not rerun for this test-only change; their earlier
-results remain historical evidence, not a new test result.
+**Recorded result at 1A:** exit 0, 7 passed, zero failures/errors/skips on Python
+3.14.7. Python 3.10 and unrelated navigation suites were not run. Whitespace
+checks passed; the new-file no-index diff returned 1 for a file difference,
+not a whitespace or test failure. No dependency was installed.
 
-Failures/fixes: no behavioral failures occurred and no production fix was
-needed. Documentation whitespace checks pass. The new file's exact check,
-`git diff --no-index --check -- NUL algorithms/test_astrophage_collection_script.py`,
-returns 1 for a new-file difference, with no whitespace error diagnostics.
-Git only reports its existing LF-to-CRLF conversion warning. This difference
-exit is not a failed unit test.
+**Executed example:** requested `(0.26,0.34)` meters -> point `(3,3)` -> displayed
+snapped meters `(0.30,0.30)`. The display used two decimal places. These are
+conversion outputs, not measured movement. Reporting that adjustment in the
+mission output remains a later change.
 
-Mutation checks: not due for this small characterization chunk. The requested
-planning, telemetry, monitoring, and command checkpoints remain ahead. No
-deliberately broken code was created or executed on hardware.
+**Limits/Git:** no input-validation, planning, dry-run, or hardware claim.
+Committed/pushed as `d31690c` after approval. The next reviewed chunk was 1B.
 
-### Executed small example
+**Plain-language recap:** We checked that the script converts between grid points
+and meters as expected. All seven tests passed, so the script needed no change.
+Rounding can move a requested target; the script still needs to tell the user
+when that happens.
 
-Exact command:
+## Milestone 1B - point clearance and A* tests
 
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms import astrophage_collection_script as mission; requested=(0.26,0.34); point=mission.to_cell(*requested); print('requested meters:',requested); print('grid point:',point); print('snapped meters: ({:.2f}, {:.2f})'.format(*mission.to_meters(point)))"
-```
+**Purpose/files:** add PointClearanceTests and GridPointSearchTests (six new
+methods plus a route-assertion helper) to the same separate test file, and update
+this record. Existing conversion tests and the production script stay unchanged.
 
-Actual output:
+**Acceptance results - all PASS:**
 
-```text
-requested meters: (0.26, 0.34)
-grid point: (3, 3)
-snapped meters: (0.30, 0.30)
-```
+- Detect points inside/on/near a rectangle; permit distant points and no obstacles.
+- Check later rectangles even when the first is far away.
+- Use straight-line corner distance: 0.25 m on each axis is about 0.354 m,
+  blocked at clearance 0.375 m and free at 0.3 m.
+- Find four-step horizontal and two-step vertical shortest open routes.
+- Find a six-step shortest detour around known blocked point `(2,1)`.
+- Return None across a separating wall, from either side.
+- Return one point and zero steps for a valid start equal to goal.
+- Preserve all seven conversion tests and return valid in-bounds cardinal steps.
 
-The last line is formatted to two decimal places for display. Conversion chooses
-the nearest grid point using the existing round operation. This demonstrates a
-planned-coordinate adjustment, not movement or measured arrival. Reporting that
-adjustment in the mission's own output is a later behavior change.
+The search example uses AREA `(0,4,0,2)`, spacing 1 m and clearance 0.25 m:
+five by three inclusive grid points. These are test values, not flight settings.
+Expected forbidden points and hand-counted lengths are independent of the
+production obstacle checker. Tests accept any equally short valid route.
 
-### Limitations, next proposed chunk, and Git state
+**Recorded verification:** the exact command in 1A exited 0 with 13 passed and
+zero failures/errors/skips on Python 3.14.7. The helper was strengthened to assert
+a non-empty route before indexing, then the same 13 tests passed again.
+`git diff --exit-code -- algorithms/astrophage_collection_script.py` exited 0;
+`git diff --check` passed. No behavior failed and no production fix was needed.
+No new run of unrelated suites or Python 3.10 was claimed. Mutation checks
+remain due at Milestone 2's planning-validation checkpoint.
 
-These tests do not validate malformed inputs, AREA's physical interpretation,
-obstacle clearance, A*, corners, complete legs, dry-run safety, telemetry,
-command semantics, or flight. No physical or mocked-flight success is claimed:
-only pure conversions were executed with temporary in-memory test settings.
-The dependency/backend and hardware limitations recorded in Chunk 0 remain.
-
-Next proposed purpose: add focused characterization tests for the script's
-existing `is_blocked` and `astar` on small valid supplied maps. Check a known
-point-to-rectangle clearance case, an open route, a detour, and an unreachable
-goal; inspect every returned step and compare shortest lengths where useful.
-Keep invalid-input fixes and continuous-segment validation for their own
-reviewed behavior changes. Corner reduction, full planning, and import/dry-run
-prohibitions will follow in separate small test chunks. No next chunk is started.
-
-At this review, only the new test file and this record are uncommitted and
-unstaged. Runtime source is unchanged. Both prior approved commits are pushed;
-there are no outgoing commits. No Milestone 1A commit or push was made. No
-prompts, logs, mutation artifacts, or credentials are included. Stop for review.
-
-Subsequent approved Git outcome: Milestone 1A was committed as `d31690c`
-(`Test mission script grid-point conversions`) and pushed alone to
-`origin/MAIN_collect_the_astrophage`. The user approved that commit/push and
-the next small clearance/search characterization chunk. No production code
-was changed during the commit/push.
-
-## Team-lead script phase: Milestone 1B - point clearance and A* tests
-
-### Purpose and files changed
-
-Protect the script's existing point-clearance and cardinal search behavior
-on small valid supplied maps. This is another test-only chunk; the team lead's
-script remains the final runtime file and is unchanged.
-
-- `algorithms/test_astrophage_collection_script.py`: added PointClearanceTests
-  and GridPointSearchTests, with six test methods and one route-assertion helper.
-  The seven earlier conversion tests remain unchanged.
-- This record: documents the new examples, evidence, and limitations.
-- No runtime function, CLI contract, configuration default, or dependency changed.
-
-### Plain explanation and acceptance criteria
-
-Point-clearance tests compare points inside, on the edge of, near, and away
-from a supplied rectangle. A second rectangle is still checked when the first
-is far away. A corner example checks actual straight-line distance: a point
-0.25 m away along both axes is about 0.354 m from the corner, so it is blocked
-with a 0.375 m margin and free with 0.3 m. These are software test values,
-not measured drone dimensions or approved flight margins.
-
-Search tests use a 5-by-3 grid-point example with one-meter spacing and a
-temporary AREA `(0,4,0,2)`. That is five inclusive x points and three y points,
-not five cells of physical arena width. Each returned route is checked against
-hand-counted shortest lengths, known forbidden points, bounds, and cardinal
-steps. The helper deliberately does not call production is_blocked to decide
-which expected points are forbidden. Multiple equally short routes are valid.
-
-| Acceptance criterion | Actual result |
-|---|---|
-| Detect rectangle interior, edge, and points inside the clearance band | PASS: all three point cases blocked |
-| Permit a distant point and an empty obstacle list; consider later rectangles | PASS: separate assertions for each outcome |
-| Use straight-line corner distance rather than per-axis or summed distance | PASS: same corner changes status at 0.375 m versus 0.3 m |
-| Find shortest horizontal and vertical routes on a rectangular map | PASS: four-step and two-step routes with valid endpoints and steps |
-| Detour around a known blocked point | PASS: six-step shortest route; no point `(2,1)` |
-| Return no route when a wall separates free endpoints | PASS: None from both sides |
-| Handle a valid start equal to goal | PASS: one-point route, zero steps |
-| Preserve conversion behavior and separate tests from runtime | PASS: all seven earlier tests still pass; runtime diff is empty |
-
-As in 1A, the behavior already exists. Tests were added and run against the
-current implementation before considering a runtime change; they all passed.
-No artificial red baseline or production fix was introduced. This does not
-encode known invalid-input or continuous-segment defects as desired behavior.
-Temporary configuration uses unittest.mock.patch in memory and is restored
-after each test. No flight entry point or hardware adapter is invoked.
-
-### Commands and actual results
-
-Exact focused command, from this worktree root:
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v
-```
-
-Initial result: exit 0, all 13 methods passed, zero failures/errors/skips.
-The route helper was then made explicit about requiring a non-empty route,
-so an empty reconstruction would produce a behavioral assertion rather than
-an indexing error. The same command was rerun: exit 0, all 13 passed again,
-zero failures/errors/skips. Six methods are new; seven are existing conversions.
-Python version: 3.14.7. Python 3.10 and unrelated navigation suites were not run.
-
-`git diff --exit-code -- algorithms/astrophage_collection_script.py` exited 0,
-confirming no runtime-source change. `git diff --check` passed with no whitespace
-errors. No dependency installation or library/firmware modification occurred.
-
-Failures and fixes: no failing behavior was encountered in these valid-map
-examples; no implementation fix was needed. Mutation checks are not due for
-this small characterization chunk. The explicit planning mutation checkpoint
-remains due with the reviewed planning-validation changes in Milestone 2.
-No mutated code, physical measurements, connection, arming, or flight occurred.
-
-### Executed worked example
-
-Exact command (configuration changes affect only this short-lived process):
-
-```powershell
-& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms import astrophage_collection_script as mission; mission.AREA=(0,4,0,2); mission.CELL=1; mission.CLEARANCE=0.25; route=mission.astar((0,1),(4,1),[(1.75,0.75,2.25,1.25)]); print('detour:',route); print('steps:',len(route)-1); print('wall:',mission.astar((0,1),(4,1),[(1.75,0,2.25,2)]))"
-```
-
-Actual output:
+**Executed example:** start `(0,1)`, goal `(4,1)`, obstacle rectangle
+`(1.75,0.75,2.25,1.25)` produced:
 
 ```text
-detour: [(0, 1), (1, 1), (1, 0), (2, 0), (3, 0), (3, 1), (4, 1)]
+[(0,1), (1,1), (1,0), (2,0), (3,0), (3,1), (4,1)]
 steps: 6
-wall: None
 ```
 
-The first obstacle blocks the central point `(2,1)`. A direct route would take
-four steps, but going around it takes six. The taller rectangle blocks all
-points at x=2, so no route connects the two sides. The observed lower detour
-is an example, not a required exact route for tests or physical movement.
+Replacing the obstacle with wall `(1.75,0,2.25,2)` returned None. The displayed
+detour is an observed example, not the only accepted route.
 
-### Limitations, next proposal, and Git status
+**Limits/Git:** point clearance does not validate the movement between points.
+Invalid endpoints/configuration, wall clearance, exact-contact policy, footprint
+allowances, measured route adherence and hardware remain unverified. No physical
+or mocked-flight success is claimed. Committed/pushed as `2603fd6` after approval.
 
-Point clearance is not continuous-segment clearance or physical obstacle
-avoidance. These cases do not establish footprint/error allowances, safe
-wall clearance, exact-contact policy, valid starts/goals, configuration/input
-validation, measured route adherence, or hardware readiness. The current
-strict less-than clearance comparison remains unreviewed at exact contact.
-No physical success or mocked-flight success is claimed.
+**Plain-language recap:** We checked whether points are too close to obstacles
+and whether A* finds sensible shortest routes. All 13 tests passed. The example
+took six steps around an obstacle and reported no route through a wall. We still
+need to check the space between points before treating a route as safe to fly.
 
-Next proposed purpose: focused tests of corners() using valid supplied cardinal
-paths. Check straight-run reduction, retained turns/final endpoint, and a
-one-point path's current empty-command result. Describe what is omitted from
-the command list without treating that as proof of actual starting position.
-Keep complete plan() and import/dry-run safety tests in later small chunks.
-Do not implement segment validation or change corner contracts in that test
-chunk. No next chunk is started.
+## Remaining work and next review
 
-Only this progress record and the existing separate test file are modified
-and uncommitted for 1B. No 1B commit or push was made. Prior 1A commit d31690c
-is pushed; no outgoing commits remain. No unrelated changes or generated
-logs/mutation artifacts are included. Stop here for review.
+Next proposed chunk: focused tests for `corners()` on valid cardinal paths:
+straight runs, retained turns/final endpoint, and the one-point empty-command
+case. This does not prove the actual drone starts at the route's first point.
+Complete plan/import/dry-run tests follow separately; no next chunk has started.
+
+Then make small reviewed changes for input/snapping validation, continuous
+segments and a measured clearance budget. Telemetry must establish coherent,
+fresh position/velocity/yaw/altitude before feedback movement is added.
+Monitoring must separate waypoint distance, finite-segment deviation, operating
+bounds and obstacle clearance, including first/final connections and movement
+between samples. One command owner must distinguish travel, braking, feedback
+hold, controlled landing and motor shutdown, with explicit fault responses.
+
+Firmware, decks, frame alignment, localization drift, sampling timing, braking,
+settling and landing need real evidence. A supplied static map cannot detect
+unmapped obstacles. No sensor/frontend work or automatic flight is authorized.
+Operator instructions/configuration guides will use implemented commands only;
+they are not yet available as verified live-testing procedures.
+
+## Documentation cleanup - current review
+
+Only this progress document changes. Repeated historical commands, review-time
+Git status and duplicate explanations were condensed; full evidence remains
+in the linked committed record. Each post-synchronization chunk now ends with
+a plain-language recap. No runtime code, tests, dependencies or hardware changed.
+
+Verification: `git diff --check -- docs/astrophage-navigation-progress.md` passed.
+Implementation tests and mutations are not applicable and were not rerun.
+This cleanup remains uncommitted/unpushed; latest pushed commit is `2603fd6`,
+with no outgoing commits. Stop for review.
+
+**Plain-language recap:** We shortened the record so the main decisions and
+results are easier to find. The older detail is still available in Git history.
+The code and its test results have not changed.
