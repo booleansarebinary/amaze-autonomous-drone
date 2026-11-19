@@ -2309,3 +2309,125 @@ At this review, only the new test file and this record are uncommitted and
 unstaged. Runtime source is unchanged. Both prior approved commits are pushed;
 there are no outgoing commits. No Milestone 1A commit or push was made. No
 prompts, logs, mutation artifacts, or credentials are included. Stop for review.
+
+Subsequent approved Git outcome: Milestone 1A was committed as `d31690c`
+(`Test mission script grid-point conversions`) and pushed alone to
+`origin/MAIN_collect_the_astrophage`. The user approved that commit/push and
+the next small clearance/search characterization chunk. No production code
+was changed during the commit/push.
+
+## Team-lead script phase: Milestone 1B - point clearance and A* tests
+
+### Purpose and files changed
+
+Protect the script's existing point-clearance and cardinal search behavior
+on small valid supplied maps. This is another test-only chunk; the team lead's
+script remains the final runtime file and is unchanged.
+
+- `algorithms/test_astrophage_collection_script.py`: added PointClearanceTests
+  and GridPointSearchTests, with six test methods and one route-assertion helper.
+  The seven earlier conversion tests remain unchanged.
+- This record: documents the new examples, evidence, and limitations.
+- No runtime function, CLI contract, configuration default, or dependency changed.
+
+### Plain explanation and acceptance criteria
+
+Point-clearance tests compare points inside, on the edge of, near, and away
+from a supplied rectangle. A second rectangle is still checked when the first
+is far away. A corner example checks actual straight-line distance: a point
+0.25 m away along both axes is about 0.354 m from the corner, so it is blocked
+with a 0.375 m margin and free with 0.3 m. These are software test values,
+not measured drone dimensions or approved flight margins.
+
+Search tests use a 5-by-3 grid-point example with one-meter spacing and a
+temporary AREA `(0,4,0,2)`. That is five inclusive x points and three y points,
+not five cells of physical arena width. Each returned route is checked against
+hand-counted shortest lengths, known forbidden points, bounds, and cardinal
+steps. The helper deliberately does not call production is_blocked to decide
+which expected points are forbidden. Multiple equally short routes are valid.
+
+| Acceptance criterion | Actual result |
+|---|---|
+| Detect rectangle interior, edge, and points inside the clearance band | PASS: all three point cases blocked |
+| Permit a distant point and an empty obstacle list; consider later rectangles | PASS: separate assertions for each outcome |
+| Use straight-line corner distance rather than per-axis or summed distance | PASS: same corner changes status at 0.375 m versus 0.3 m |
+| Find shortest horizontal and vertical routes on a rectangular map | PASS: four-step and two-step routes with valid endpoints and steps |
+| Detour around a known blocked point | PASS: six-step shortest route; no point `(2,1)` |
+| Return no route when a wall separates free endpoints | PASS: None from both sides |
+| Handle a valid start equal to goal | PASS: one-point route, zero steps |
+| Preserve conversion behavior and separate tests from runtime | PASS: all seven earlier tests still pass; runtime diff is empty |
+
+As in 1A, the behavior already exists. Tests were added and run against the
+current implementation before considering a runtime change; they all passed.
+No artificial red baseline or production fix was introduced. This does not
+encode known invalid-input or continuous-segment defects as desired behavior.
+Temporary configuration uses unittest.mock.patch in memory and is restored
+after each test. No flight entry point or hardware adapter is invoked.
+
+### Commands and actual results
+
+Exact focused command, from this worktree root:
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v
+```
+
+Initial result: exit 0, all 13 methods passed, zero failures/errors/skips.
+The route helper was then made explicit about requiring a non-empty route,
+so an empty reconstruction would produce a behavioral assertion rather than
+an indexing error. The same command was rerun: exit 0, all 13 passed again,
+zero failures/errors/skips. Six methods are new; seven are existing conversions.
+Python version: 3.14.7. Python 3.10 and unrelated navigation suites were not run.
+
+`git diff --exit-code -- algorithms/astrophage_collection_script.py` exited 0,
+confirming no runtime-source change. `git diff --check` passed with no whitespace
+errors. No dependency installation or library/firmware modification occurred.
+
+Failures and fixes: no failing behavior was encountered in these valid-map
+examples; no implementation fix was needed. Mutation checks are not due for
+this small characterization chunk. The explicit planning mutation checkpoint
+remains due with the reviewed planning-validation changes in Milestone 2.
+No mutated code, physical measurements, connection, arming, or flight occurred.
+
+### Executed worked example
+
+Exact command (configuration changes affect only this short-lived process):
+
+```powershell
+& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -c "from algorithms import astrophage_collection_script as mission; mission.AREA=(0,4,0,2); mission.CELL=1; mission.CLEARANCE=0.25; route=mission.astar((0,1),(4,1),[(1.75,0.75,2.25,1.25)]); print('detour:',route); print('steps:',len(route)-1); print('wall:',mission.astar((0,1),(4,1),[(1.75,0,2.25,2)]))"
+```
+
+Actual output:
+
+```text
+detour: [(0, 1), (1, 1), (1, 0), (2, 0), (3, 0), (3, 1), (4, 1)]
+steps: 6
+wall: None
+```
+
+The first obstacle blocks the central point `(2,1)`. A direct route would take
+four steps, but going around it takes six. The taller rectangle blocks all
+points at x=2, so no route connects the two sides. The observed lower detour
+is an example, not a required exact route for tests or physical movement.
+
+### Limitations, next proposal, and Git status
+
+Point clearance is not continuous-segment clearance or physical obstacle
+avoidance. These cases do not establish footprint/error allowances, safe
+wall clearance, exact-contact policy, valid starts/goals, configuration/input
+validation, measured route adherence, or hardware readiness. The current
+strict less-than clearance comparison remains unreviewed at exact contact.
+No physical success or mocked-flight success is claimed.
+
+Next proposed purpose: focused tests of corners() using valid supplied cardinal
+paths. Check straight-run reduction, retained turns/final endpoint, and a
+one-point path's current empty-command result. Describe what is omitted from
+the command list without treating that as proof of actual starting position.
+Keep complete plan() and import/dry-run safety tests in later small chunks.
+Do not implement segment validation or change corner contracts in that test
+chunk. No next chunk is started.
+
+Only this progress record and the existing separate test file are modified
+and uncommitted for 1B. No 1B commit or push was made. Prior 1A commit d31690c
+is pushed; no outgoing commits remain. No unrelated changes or generated
+logs/mutation artifacts are included. Stop here for review.

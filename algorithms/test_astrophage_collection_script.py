@@ -1,4 +1,4 @@
-"""Grid-point conversion tests for the team lead's mission script; no hardware."""
+"""Pure conversion, clearance, and search tests for the mission script; no hardware."""
 
 import unittest
 from unittest.mock import patch
@@ -58,6 +58,70 @@ class GridPointConversionTests(unittest.TestCase):
         with patch.multiple(mission, AREA=(-1, 1, -2, 0), CELL=0.5):
             self.assertEqual(mission.to_cell(-0.74, -1.24), (1, 2))
             self.assertEqual(mission.to_meters((1, 2)), (-0.5, -1.0))
+
+
+class PointClearanceTests(unittest.TestCase):
+    def setUp(self):
+        settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=0.25, CLEARANCE=0.375)
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def test_inside_edge_near_and_distant_points_against_supplied_rectangles(self):
+        obstacle = (1, 1, 2, 2)
+        for point in [(6, 6), (4, 6), (3, 6)]:
+            with self.subTest(point=point):
+                self.assertTrue(mission.is_blocked(point, [obstacle]))
+        self.assertFalse(mission.is_blocked((2, 6), [obstacle]))
+        self.assertFalse(mission.is_blocked((6, 6), []))
+        # A later rectangle still blocks the point when the first is far away.
+        self.assertTrue(mission.is_blocked((6, 6), [(3, 2, 4, 3), obstacle]))
+
+    def test_rectangle_corner_uses_straight_line_distance(self):
+        # (0.75, 0.75) is sqrt(0.25**2 + 0.25**2) from this rectangle.
+        obstacle = (1, 1, 2, 2)
+        self.assertTrue(mission.is_blocked((3, 3), [obstacle]))
+        with patch.object(mission, "CLEARANCE", 0.3):
+            self.assertFalse(mission.is_blocked((3, 3), [obstacle]))
+
+
+class GridPointSearchTests(unittest.TestCase):
+    def setUp(self):
+        # Inclusive point indices are x=0..4 and y=0..2 in this example.
+        settings = patch.multiple(mission, AREA=(0, 4, 0, 2), CELL=1, CLEARANCE=0.25)
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def assert_valid_route(self, route, start, goal, blocked_points, steps):
+        self.assertTrue(route, "expected a non-empty route")
+        self.assertEqual((route[0], route[-1]), (start, goal))
+        self.assertEqual(len(route) - 1, steps)
+        for x, y in route:
+            self.assertTrue(0 <= x <= 4 and 0 <= y <= 2)
+            # Independent expected obstacle points, not the production checker.
+            self.assertNotIn((x, y), blocked_points)
+        for first, second in zip(route, route[1:]):
+            self.assertEqual(abs(first[0] - second[0]) + abs(first[1] - second[1]), 1)
+
+    def test_open_rectangular_map_has_shortest_cardinal_routes(self):
+        for start, goal, steps in [((0, 1), (4, 1), 4), ((4, 0), (4, 2), 2)]:
+            with self.subTest(start=start, goal=goal):
+                route = mission.astar(start, goal, [])
+                self.assert_valid_route(route, start, goal, set(), steps)
+
+    def test_single_blocked_point_requires_a_shortest_detour(self):
+        obstacle = (1.75, 0.75, 2.25, 1.25)
+        route = mission.astar((0, 1), (4, 1), [obstacle])
+        self.assert_valid_route(route, (0, 1), (4, 1), {(2, 1)}, steps=6)
+
+    def test_wall_separating_free_endpoints_has_no_route(self):
+        obstacle = (1.75, 0, 2.25, 2)
+        for start, goal in [((0, 1), (4, 1)), ((4, 1), (0, 1))]:
+            with self.subTest(start=start):
+                self.assertIsNone(mission.astar(start, goal, [obstacle]))
+
+    def test_same_valid_start_and_goal_returns_one_point(self):
+        route = mission.astar((1, 1), (1, 1), [])
+        self.assert_valid_route(route, (1, 1), (1, 1), set(), steps=0)
 
 
 if __name__ == "__main__":
