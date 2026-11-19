@@ -75,6 +75,7 @@ def astar(start, goal, obstacles):
 
 def corners(path):
     """Keep only the cells where the path turns, plus the last one."""
+    # Removes intermediate steps between two waypoints
     kept = []
     for i in range(1, len(path)):
         last = i == len(path) - 1
@@ -108,6 +109,7 @@ def fly(legs):
     from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
     from cflib.positioning.position_hl_commander import PositionHlCommander
     from cflib.utils.reset_estimator import reset_estimator
+    from cflib.crazyflie.log import LogConfig
 
     cflib.crtp.init_drivers()
     print(f"Connecting to {URI} ...")
@@ -119,23 +121,63 @@ def fly(legs):
             )
         print("Finding position: keep the drone still on the floor...")
         reset_estimator(scf)  # makes the current spot (0, 0); waits until it settles
-        scf.cf.platform.send_arming_request(True)
-        time.sleep(1.0)
-        # Takes off on entering the block and lands on leaving it.
-        with PositionHlCommander(
-            scf,
-            default_height=HEIGHT,
-            default_velocity=SPEED,
-            controller=PositionHlCommander.CONTROLLER_PID,
-        ) as pc:
-            for i, (stop, waypoints) in enumerate(legs):
-                for x, y in waypoints:
-                    pc.go_to(x, -y)  # our +y is right; Crazyflie's +y is left
-                if i < len(legs) - 1:
-                    print(f"Hovering at {stop} for {HOVER_S:g} s")
-                    time.sleep(HOVER_S)
-            print("Home, landing")
 
+        """I will have no idea how this works tommorrow, only god can answer ur questions sorry"""
+        def current_position_received(timestamp, data, log_config): # Library should automatically pass parameters...
+            # Extracts x, y, and z from the passed packet
+            # Prints the x, y, and z
+            x = data["stateEstimate.x"]
+            y = data["stateEstimate.y"]
+            z = data["stateEstimate.z"]
+        
+            print (
+                f"position: x={x:.3f}m, "
+                f"y={y:.3f} m, "
+                f"z={z:.3f} m"
+            )
+        
+        # Adds logging for telemetry data
+        position_log = LogConfig(name="Position", period_in_ms=100)
+        position_log.add_variable("stateEstimate.x", "float")
+        position_log.add_variable("stateEstimate.y", "float")
+        position_log.add_variable("stateEstimate.z", "float")
+        
+        position_log.data_received_cb.add_callback(current_position_received)
+        scf.cf.log.add_config(position_log)
+        position_log.start()
+
+        """Added Try Finally block to stop telemetry stream even if code breaks and flight fails"""
+        try:
+            scf.cf.platform.send_arming_request(True)
+            time.sleep(1.0)
+            # Takes off on entering the block and lands on leaving it.
+            with PositionHlCommander(
+                scf,
+                default_height=HEIGHT,
+                default_velocity=SPEED,
+                controller=PositionHlCommander.CONTROLLER_PID,
+            ) as pc:
+                for i, (stop, waypoints) in enumerate(legs):
+                    for x, y in waypoints:
+                        pc.go_to(x, -y)  # our +y is right; Crazyflie's +y is left
+                    if i < len(legs) - 1:
+                        print(f"Hovering at {stop} for {HOVER_S:g} s")
+                        time.sleep(HOVER_S)
+                print("Home, landing")
+            input("Telemetry is running. Move the drone manually, then press Enter...\n")
+        finally:
+            position_log.stop()
+
+def print_position(timestamp, data, log_config):
+    x = data["stateEstimate.x"]
+    y = data["stateEstimate.y"]
+    z = data["stateEstimate.z"]
+
+    print(
+        f"position: x={x:.3f} m, "
+        f"y={y:.3f} m, "
+        f"z={z:.3f} m"
+    )
 
 def main():
     parser = argparse.ArgumentParser(
