@@ -10,8 +10,9 @@ navigation modules are reference work, not a replacement runtime architecture.
 Keep grid-point coordinates: `world = origin + index * spacing`, with no
 half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
 and reactive avoidance are outside this phase. No automatic physical flight.
-The latest focused run passed 23 tests on Python 3.14.7. The mission script
-has not changed during the current test phase. Physical flight is unverified.
+The latest focused run passed 25 tests on Python 3.14.7. The mission script
+has since gained telemetry and position-check code in commits `d3bb309` and
+`4ace8f9`; physical flight is unverified.
 
 This record summarizes completed work. The
 [full record through commit 2603fd6](https://github.com/booleansarebinary/amaze-autonomous-drone/blob/2603fd6/docs/astrophage-navigation-progress.md)
@@ -323,19 +324,58 @@ not for this characterization chunk. Python 3.10 was not tested.
 
 **Limits/Git:** `plan()` has no measured position, segment clearance check,
 input validation, or report of snapping to a grid point. An empty leg does not
-establish arrival. Only the test file and this record are changed; this 1D
-change is uncommitted and unpushed. Stop for review.
+establish arrival. Committed and pushed as `2b681d4` after approval.
 
 **Plain-language recap:** We checked that the script plans the stops in the
 given order and adds a route home. It also reports when a stop is blocked or
 cut off by a wall. All 23 tests passed, but these checks say nothing about what
 a physical drone actually did.
 
+## Milestone 1E - import and dry-run safety tests
+
+**Purpose/files:** add two `CommandLineSafetyTests` to the separate test file
+and record results here. Check that loading the mission script does not import
+Crazyflie code, and that `--dry-run` prints routes without calling `fly()`.
+No runtime code changed.
+
+**Acceptance results - all PASS:** the import probe blocks any `cflib` import
+and successfully loads the script; the dry-run prints the supplied test target
+and home route, while a mocked `fly()` is not called. The test fixture sets
+`HOME=(0.0, 0.0)` explicitly so it does not depend on the current mission
+home setting.
+
+**Executed example:** the dry-run test used target `(0.2, 0.0)` on an open map.
+It captured route lines for that target and home; no radio connection or flight
+command was sent. This verifies the existing CLI path only.
+
+**Failures and fix:** at the start of this chunk, three existing planning tests
+failed because newer committed mission code sets `HOME=(1.0, 1.0)`, while those
+tests had assumed `(0,0)`. The tests now set their own home value. One follow-up
+run exposed an integer-versus-float difference in the expected error text;
+setting the fixture to `(0.0, 0.0)` fixed that. The final run passed all tests.
+
+**Verification:**
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v`
+exited 0 on Python 3.14.7: 25 passed, zero failures/errors/skips.
+`git diff --check` passed; the mission script has no local diff. These are
+software checks only. No hardware, radio connection or physical flight was
+used. Mutation checks are not due for this test-only chunk; the Milestone 2
+planning-validation checkpoint remains due. Python 3.10 was not tested.
+
+**Limits/Git:** import safety depends on Crazyflie library imports remaining
+inside `fly()` or another explicit runtime call. A successful dry-run does not
+prove the actual flight path is safe. Only the separate test file and this
+record are changed; this chunk is uncommitted and unpushed. Stop for review.
+
+**Plain-language recap:** We checked that opening the script does not load the
+drone library, and that `--dry-run` prints a route without calling the flight
+function. All 25 tests passed. These checks did not connect to or move a drone.
+
 ## Remaining work and next review
 
-Next proposed chunk: check that importing the script and running `--dry-run`
-cannot call flight APIs. Keep radio access mocked and use the existing CLI.
-No next chunk has started.
+Next proposed chunk: begin Milestone 2 with input validation for grid
+configuration and coordinates, using tests before changing `to_cell()` or
+`plan()`. Keep the change limited to one clear validation behavior.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,

@@ -1,6 +1,11 @@
 """Pure planning tests for the team lead's mission script; no hardware."""
 
+import builtins
+import importlib.util
+import io
 import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from algorithms import astrophage_collection_script as mission
@@ -158,7 +163,9 @@ class CornerReductionTests(unittest.TestCase):
 
 class CompletePlanTests(unittest.TestCase):
     def setUp(self):
-        settings = patch.multiple(mission, AREA=(0, 3, 0, 2), CELL=1, CLEARANCE=0.25)
+        settings = patch.multiple(
+            mission, AREA=(0, 3, 0, 2), HOME=(0.0, 0.0), CELL=1, CLEARANCE=0.25
+        )
         settings.start()
         self.addCleanup(settings.stop)
 
@@ -187,6 +194,45 @@ class CompletePlanTests(unittest.TestCase):
         wall = (1.75, 0, 2.25, 2)
         with self.assertRaisesRegex(SystemExit, r"No path to \(3, 0\)"):
             mission.plan([(3, 0)], [wall])
+
+
+class CommandLineSafetyTests(unittest.TestCase):
+    def test_import_does_not_import_crazyflie_or_start_radio_access(self):
+        spec = importlib.util.spec_from_file_location(
+            "astrophage_import_safety_probe", Path(mission.__file__)
+        )
+        module = importlib.util.module_from_spec(spec)
+        original_import = builtins.__import__
+
+        def reject_crazyflie_import(name, *args, **kwargs):
+            if name == "cflib" or name.startswith("cflib."):
+                raise AssertionError(f"unexpected Crazyflie import: {name}")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=reject_crazyflie_import):
+            spec.loader.exec_module(module)
+
+        self.assertTrue(callable(module.main))
+
+    def test_dry_run_prints_route_without_calling_fly(self):
+        settings = patch.multiple(
+            mission,
+            AREA=(0, 2, 0, 2),
+            HOME=(0, 0),
+            CELL=0.1,
+            CLEARANCE=0.01,
+            TARGETS=[(0.2, 0.0)],
+            OBSTACLES=[],
+        )
+        with settings, patch.object(mission, "fly") as fly:
+            with patch("sys.argv", ["astrophage_collection_script", "--dry-run"]):
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    mission.main()
+
+        fly.assert_not_called()
+        self.assertIn("To (0.2, 0.0)", output.getvalue())
+        self.assertIn("To (0, 0)", output.getvalue())
 
 
 if __name__ == "__main__":
