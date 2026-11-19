@@ -10,7 +10,7 @@ navigation modules are reference work, not a replacement runtime architecture.
 Keep grid-point coordinates: `world = origin + index * spacing`, with no
 half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
 and reactive avoidance are outside this phase. No automatic physical flight.
-The latest focused run passed 18 tests on Python 3.14.7. The mission script
+The latest focused run passed 23 tests on Python 3.14.7. The mission script
 has not changed during the current test phase. Physical flight is unverified.
 
 This record summarizes completed work. The
@@ -289,20 +289,53 @@ checkpoint remains due with Milestone 2. Python 3.10 was not executed.
 **Limits/Git:** reduction does not check obstacle clearance between retained
 points, actual start position, measured arrival, malformed paths, or flight.
 An empty command list for a one-point path is not proof of physical arrival.
-Only the test file and this record are modified, unstaged/uncommitted; no 1C
-commit or push occurred and there are no outgoing commits. Stop for review.
+Committed and pushed as `e68c5d9` after approval. No runtime code changed.
 
 **Plain-language recap:** We checked that the script removes unnecessary stops
 on straight stretches while keeping the turns and destination. All 18 tests
 passed, so the script needed no change. We still have to check that the actual
 movement between these points is safe.
 
+## Milestone 1D - complete route-planning tests
+
+**Purpose/files:** add five `CompletePlanTests` to the separate test file and
+record the results here. Exercise `plan()` with small supplied, grid-aligned
+maps. The mission script and its function contracts remain unchanged.
+
+**Acceptance results - all PASS:** two supplied targets stay in order and are
+followed by a home leg; each tested leg ends at its intended grid point; no
+targets yield only an empty home leg; blocked targets and blocked home report
+the stop; a wall separating start and target reports no path. The supplied
+target list remains unchanged. Temporary test settings are restored afterward.
+
+**Executed example:** with 1 m spacing, no obstacles, and targets `(1,0)` then
+`(1,1)`, the returned stop order was `(1,0)`, `(1,1)`, `(0,0)`; the first two
+waypoint lists were `[(1,0)]` and `[(1,1)]`, and the home leg ended at `(0,0)`.
+This is a planned route, not a measured flight or verified arrival.
+
+**Verification:**
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v`
+exited 0 on Python 3.14.7: 23 tests passed, zero failures/errors/skips.
+The five new tests passed on the existing code, so there was no missing behavior
+to demonstrate or production fix to make. No hardware or flight library was
+used. Mutations are due at the Milestone 2 planning-validation checkpoint,
+not for this characterization chunk. Python 3.10 was not tested.
+
+**Limits/Git:** `plan()` has no measured position, segment clearance check,
+input validation, or report of snapping to a grid point. An empty leg does not
+establish arrival. Only the test file and this record are changed; this 1D
+change is uncommitted and unpushed. Stop for review.
+
+**Plain-language recap:** We checked that the script plans the stops in the
+given order and adds a route home. It also reports when a stop is blocked or
+cut off by a wall. All 23 tests passed, but these checks say nothing about what
+a physical drone actually did.
+
 ## Remaining work and next review
 
-Next proposed chunk: focused tests for `plan()` with supplied targets, target
-ordering, outbound/home legs, and blocked/unreachable goal errors. Use small
-supplied maps and grid-aligned targets; no flight. Import/dry-run safety tests
-follow separately; no next chunk has started.
+Next proposed chunk: check that importing the script and running `--dry-run`
+cannot call flight APIs. Keep radio access mocked and use the existing CLI.
+No next chunk has started.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,
@@ -327,8 +360,7 @@ a plain-language recap. No runtime code, tests, dependencies or hardware changed
 
 Verification: `git diff --check -- docs/astrophage-navigation-progress.md` passed.
 Implementation tests and mutations are not applicable and were not rerun.
-The cleanup was committed/pushed as `e12e62d` after approval. This is the latest
-pushed commit; the subsequent 1C test changes above remain uncommitted.
+The cleanup was committed/pushed as `e12e62d` after approval.
 
 **Plain-language recap:** We shortened the record so the main decisions and
 results are easier to find. The older detail is still available in Git history.

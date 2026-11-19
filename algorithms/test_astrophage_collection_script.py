@@ -156,5 +156,38 @@ class CornerReductionTests(unittest.TestCase):
             self.assertEqual(mission.corners(path), [(-0.5, 0.5), (-0.5, 1.0)])
 
 
+class CompletePlanTests(unittest.TestCase):
+    def setUp(self):
+        settings = patch.multiple(mission, AREA=(0, 3, 0, 2), CELL=1, CLEARANCE=0.25)
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def test_supplied_targets_are_visited_in_order_then_home(self):
+        targets = [(1, 0), (1, 1)]
+        legs = mission.plan(targets, [])
+
+        self.assertEqual([stop for stop, _ in legs], targets + [(0.0, 0.0)])
+        self.assertEqual(legs[0][1], [(1, 0)])
+        self.assertEqual(legs[1][1], [(1, 1)])
+        self.assertEqual(legs[2][1][-1], (0, 0))
+        self.assertEqual(targets, [(1, 0), (1, 1)])
+
+    def test_no_targets_produces_only_an_empty_home_leg(self):
+        self.assertEqual(mission.plan([], []), [((0.0, 0.0), [])])
+
+    def test_blocked_target_reports_which_stop_failed(self):
+        with self.assertRaisesRegex(SystemExit, r"Target \(1, 0\).*too close"):
+            mission.plan([(1, 0)], [(0.9, -0.1, 1.1, 0.1)])
+
+    def test_blocked_home_is_rejected(self):
+        with self.assertRaisesRegex(SystemExit, r"Target \(0\.0, 0\.0\).*too close"):
+            mission.plan([], [(-0.1, -0.1, 0.1, 0.1)])
+
+    def test_unreachable_target_reports_no_path(self):
+        wall = (1.75, 0, 2.25, 2)
+        with self.assertRaisesRegex(SystemExit, r"No path to \(3, 0\)"):
+            mission.plan([(3, 0)], [wall])
+
+
 if __name__ == "__main__":
     unittest.main()
