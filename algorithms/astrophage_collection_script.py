@@ -1,6 +1,6 @@
 """Fly to each target with A*, hover 3 seconds, move on, then return home.
 
-All positions are in meters, measured from where the drone takes off (0, 0).
+All positions are in meters, measured from where the drone takes off *HOME.
 Place the drone facing +x; +y is to its RIGHT. (The Crazyflie itself uses
 +y = left, so y is flipped only when sending commands to it.) Needs the Flow deck.
 
@@ -18,6 +18,7 @@ TARGETS = [(1.0, 1.0)]
 # Each obstacle is (x_min, y_min, x_max, y_max).
 OBSTACLES = [(0.49, 0.49, 0.51, 0.51), (0.99, 0.0, 1.03, 0.5)]
 AREA = (0, 2, 0, 2)  # (x_min, x_max, y_min, y_max)
+HOME = (1.0, 1.0) # placeholder home coordinates, can change later
 CELL = 0.1
 CLEARANCE = 0.15
 HEIGHT = 0.3
@@ -34,14 +35,19 @@ def to_meters(cell):
     return AREA[0] + cell[0] * CELL, AREA[2] + cell[1] * CELL
 
 
-def is_blocked(cell, obstacles):
-    x, y = to_meters(cell)
+# Checks wheter drone live position is too close to an obstacle
+def obstacle_checker(x, y, obstacles):
     for x_min, y_min, x_max, y_max in obstacles:
         dx = max(x_min - x, 0, x - x_max)
         dy = max(y_min - y, 0, y - y_max)
         if (dx * dx + dy * dy) ** 0.5 < CLEARANCE:
-            return True
-    return False
+            return False
+        
+    return True
+
+def is_blocked(cell, obstacles):
+    x, y = to_meters(cell)
+    return not obstacle_checker(x, y, obstacles)
 
 
 def astar(start, goal, obstacles):
@@ -90,8 +96,8 @@ def corners(path):
 def plan(targets, obstacles):
     """Return a list of legs; each leg is the waypoints to one stop."""
     legs = []
-    here = to_cell(0.0, 0.0)
-    for stop in list(targets) + [(0.0, 0.0)]:
+    here = to_cell(*HOME)
+    for stop in list(targets) + [HOME]:
         goal = to_cell(*stop)
         if is_blocked(goal, obstacles):
             raise SystemExit(f"Target {stop} is inside or too close to an obstacle.")
@@ -103,7 +109,7 @@ def plan(targets, obstacles):
     return legs
 
 
-def fly(legs):
+def fly(legs, obstacles):
     import cflib.crtp
     from cflib.crazyflie import Crazyflie
     from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
@@ -126,8 +132,8 @@ def fly(legs):
         def current_position_received(timestamp, data, log_config): # Library should automatically pass parameters...
             # Extracts x, y, and z from the passed packet
             # Prints the x, y, and z
-            x = data["stateEstimate.x"]
-            y = data["stateEstimate.y"]
+            x = HOME[0] + data["stateEstimate.x"]
+            y = HOME[1] - data["stateEstimate.y"]
             z = data["stateEstimate.z"]
         
             print (
@@ -135,6 +141,12 @@ def fly(legs):
                 f"y={y:.3f} m, "
                 f"z={z:.3f} m"
             )
+
+            if not boundary_checker(x,y):
+                print("Too close to an edge")
+
+            if not obstacle_checker(x, y, obstacles):
+                print("Too close to an obstacle")
         
         # Adds logging for telemetry data
         position_log = LogConfig(name="Position", period_in_ms=100)
@@ -159,7 +171,7 @@ def fly(legs):
             ) as pc:
                 for i, (stop, waypoints) in enumerate(legs):
                     for x, y in waypoints:
-                        pc.go_to(x, -y)  # our +y is right; Crazyflie's +y is left
+                        pc.go_to(x - HOME[0], HOME[1] - y)  # our +y is right; Crazyflie's +y is left
                     if i < len(legs) - 1:
                         print(f"Hovering at {stop} for {HOVER_S:g} s")
                         time.sleep(HOVER_S)
@@ -168,15 +180,13 @@ def fly(legs):
         finally:
             position_log.stop()
 
-def print_position(timestamp, data, log_config):
-    x = data["stateEstimate.x"]
-    y = data["stateEstimate.y"]
-    z = data["stateEstimate.z"]
+# Checks whether drone live position is within the bounds of the area
+def boundary_checker(x, y):
+    x_min, x_max, y_min, y_max = AREA
 
-    print(
-        f"position: x={x:.3f} m, "
-        f"y={y:.3f} m, "
-        f"z={z:.3f} m"
+    return (
+        x_min + CLEARANCE <= x <= x_max - CLEARANCE
+        and y_min + CLEARANCE <= y <= y_max - CLEARANCE
     )
 
 def main():
@@ -206,7 +216,7 @@ def main():
         route = " -> ".join(f"({x:.2f}, {y:.2f})" for x, y in waypoints)
         print(f"To {stop}: {route}")
     if not args.dry_run:
-        fly(legs)
+        fly(legs, obstacles)
 
 
 if __name__ == "__main__":
