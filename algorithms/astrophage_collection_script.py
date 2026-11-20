@@ -28,20 +28,37 @@ HOVER_S = 3.0
 URI = "radio://0/80/2M/E7E7E7E7E7"
 
 
+def _finite_number(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _validate_grid():
+    if not _finite_number(CELL) or CELL <= 0:
+        raise ValueError("CELL must be a positive finite number")
+    if not isinstance(AREA, (tuple, list)) or len(AREA) != 4:
+        raise ValueError("AREA must contain four finite numbers")
+    for bound in AREA:
+        if not _finite_number(bound):
+            raise ValueError("AREA must contain four finite numbers")
+    x_min, x_max, y_min, y_max = AREA
+    if x_min >= x_max or y_min >= y_max:
+        raise ValueError("AREA bounds must increase")
+
+
 def to_cell(x, y):
-    for value in (x, y):
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError("Coordinates must be finite numbers")
-        try:
-            finite = math.isfinite(value)
-        except OverflowError:
-            finite = False
-        if not finite:
-            raise ValueError("Coordinates must be finite numbers")
+    if not _finite_number(x) or not _finite_number(y):
+        raise ValueError("Coordinates must be finite numbers")
+    _validate_grid()
     return round((x - AREA[0]) / CELL), round((y - AREA[2]) / CELL)
 
 
 def to_meters(cell):
+    _validate_grid()
     return AREA[0] + cell[0] * CELL, AREA[2] + cell[1] * CELL
 
 

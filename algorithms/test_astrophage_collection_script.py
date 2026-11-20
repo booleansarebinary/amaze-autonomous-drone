@@ -99,6 +99,36 @@ class CoordinateValidationTests(unittest.TestCase):
                 search.assert_not_called()
 
 
+class GridConfigurationTests(unittest.TestCase):
+    def test_spacing_must_be_a_positive_finite_number(self):
+        for spacing in [0, -0.1, float("nan"), float("inf"), True, "0.1"]:
+            with self.subTest(spacing=spacing), patch.object(mission, "CELL", spacing):
+                with self.assertRaisesRegex(ValueError, "CELL must be a positive finite number"):
+                    mission.to_cell(0, 0)
+                with self.assertRaisesRegex(ValueError, "CELL must be a positive finite number"):
+                    mission.to_meters((0, 0))
+
+    def test_area_must_contain_four_finite_numbers(self):
+        for area in [(0, 2, 0), (0, float("inf"), 0, 2), (0, "2", 0, 2), (True, 2, 0, 2)]:
+            with self.subTest(area=area), patch.object(mission, "AREA", area):
+                with self.assertRaisesRegex(ValueError, "AREA must contain four finite numbers"):
+                    mission.to_cell(0, 0)
+                with self.assertRaisesRegex(ValueError, "AREA must contain four finite numbers"):
+                    mission.to_meters((0, 0))
+
+    def test_area_minimums_must_be_less_than_maximums(self):
+        for area in [(2, 0, 0, 2), (0, 2, 2, 0), (0, 0, 0, 2), (0, 2, 0, 0)]:
+            with self.subTest(area=area), patch.object(mission, "AREA", area):
+                with self.assertRaisesRegex(ValueError, "AREA bounds must increase"):
+                    mission.to_cell(0, 0)
+
+    def test_plan_rejects_bad_grid_settings_before_search(self):
+        with patch.object(mission, "CELL", 0), patch.object(mission, "astar") as search:
+            with self.assertRaisesRegex(ValueError, "CELL must be a positive finite number"):
+                mission.plan([], [])
+            search.assert_not_called()
+
+
 class PointClearanceTests(unittest.TestCase):
     def setUp(self):
         settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=0.25, CLEARANCE=0.375)

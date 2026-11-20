@@ -10,7 +10,7 @@ navigation modules are reference work, not a replacement runtime architecture.
 Keep grid-point coordinates: `world = origin + index * spacing`, with no
 half-cell offset. Use supplied static obstacles. Ultrasound, frontend work,
 and reactive avoidance are outside this phase. No automatic physical flight.
-The latest focused run passed 29 tests on Python 3.14.7. The mission script
+The latest focused run passed 33 tests on Python 3.14.7. The mission script
 has since gained telemetry and position-check code in commits `d3bb309` and
 `4ace8f9`; physical flight is unverified.
 
@@ -403,18 +403,59 @@ at the later Milestone 2 planning-validation checkpoint; none ran here.
 **Limits/Git:** this validates supplied x/y coordinates only. `AREA`, `CELL`,
 obstacle rectangles, map bounds, snapped target reporting and continuous
 movement clearance still need review. Python 3.10 and physical flight remain
-untested. The script, separate test file and this record are modified locally;
-no 2A commit or push has occurred. Stop for review.
+untested. Committed and pushed as `ae71a23` after approval.
 
 **Plain-language recap:** If a target or home coordinate is missing, infinite
 or otherwise unusable, the script now stops with a clear error before planning
 a route. All 29 tests pass. We still need to check the map settings and the
 space between planned points.
 
+## Milestone 2B - validate grid spacing and map bounds
+
+**Purpose/files:** add `_finite_number()` and `_validate_grid()` inside the
+team lead's mission script. The helper checks `CELL` and `AREA` before
+`to_cell()` or `to_meters()` converts a point; `plan()` reaches the same check
+before searching. Reuse `_finite_number()` for the coordinate check from 2A.
+Add four `GridConfigurationTests` in the separate test file and update this
+record. Valid grid-point conversion stays unchanged.
+
+**Acceptance results - all PASS:** spacing must be a positive finite number;
+`AREA` must contain exactly four finite numeric bounds; x and y minima must
+each be less than their maxima; both conversion directions reject bad settings;
+`plan()` rejects bad spacing before `astar()` runs; earlier tests still pass.
+
+**Executed example:** with `CELL=0`, `AREA=(0,2,0,2)`, and point `(0,0)`,
+`to_cell()` now raises `ValueError("CELL must be a positive finite number")`
+before dividing. The same invalid spacing also makes `to_meters()` raise that
+error. These are software checks, not drone measurements.
+
+**TDD and verification:** first ran
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script.GridConfigurationTests -v`
+against the old code: 4 test methods ran, with 12 failed cases and 3 errors.
+Bad settings had reached division by zero, raw type errors, or even returned
+indices. After the implementation, ran
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script -v`:
+33 passed, zero failures/errors/skips on Python 3.14.7. `git diff --check`
+passed. No radio, drone or physical flight was used. Mutation checks remain
+due after the later planning safety changes; none ran in this chunk.
+
+**Limits/Git:** this checks configuration shape, numeric values and bound
+ordering. It does not yet ensure that rounded grid dimensions stay inside
+`AREA`, define whether `AREA` is a drone-center region or physical arena wall,
+or validate obstacle rectangles, clearance and measured flight. Python 3.10
+was not tested. The script, separate test file and this record are modified
+locally; no 2B commit or push has occurred. Stop for review.
+
+**Plain-language recap:** The script now rejects a zero or invalid grid size
+and a map whose edges are missing or out of order. All 33 tests pass. We still
+need to check how the last grid point relates to a map edge that falls between
+grid points.
+
 ## Remaining work and next review
 
-Next proposed chunk: validate grid spacing and map extent settings before
-conversion or search, using focused tests first. No next chunk has started.
+Next proposed chunk: define and test legal grid points when an `AREA` edge falls
+between grid points, so search cannot select a point beyond the map bound.
+No next chunk has started.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,
