@@ -156,6 +156,32 @@ class ObstacleConfigurationTests(unittest.TestCase):
                         search.assert_not_called()
 
 
+class RequestedPositionBoundsTests(unittest.TestCase):
+    def setUp(self):
+        settings = patch.multiple(
+            mission, AREA=(0, 1, 0, 1), CELL=0.1, CLEARANCE=0.01, HOME=(0.0, 0.0)
+        )
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def test_target_outside_area_is_rejected_even_if_rounding_moves_it_inside(self):
+        for target in [(-0.02, 0.5), (1.02, 0.5), (0.5, -0.02), (0.5, 1.02)]:
+            with self.subTest(target=target):
+                with patch.object(mission, "astar") as search:
+                    with self.assertRaisesRegex(ValueError, "outside AREA"):
+                        mission.plan([target], [])
+                    search.assert_not_called()
+
+    def test_home_outside_area_is_rejected_before_search(self):
+        for home in [(-0.02, 0.5), (1.02, 0.5), (0.5, -0.02), (0.5, 1.02)]:
+            with self.subTest(home=home):
+                with patch.object(mission, "HOME", home):
+                    with patch.object(mission, "astar") as search:
+                        with self.assertRaisesRegex(ValueError, "outside AREA"):
+                            mission.plan([], [])
+                        search.assert_not_called()
+
+
 class PointClearanceTests(unittest.TestCase):
     def setUp(self):
         settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=0.25, CLEARANCE=0.375)
@@ -254,6 +280,53 @@ class MapEdgeRouteTests(unittest.TestCase):
             for _, waypoints in legs:
                 for point in waypoints:
                     self.assert_inside_area(point, area)
+
+
+class ContinuousSegmentTests(unittest.TestCase):
+    def assert_route_avoids_rectangle(self, legs, home, obstacle):
+        x_min, y_min, x_max, y_max = obstacle
+        start = home
+        for stop, waypoints in legs:
+            self.assertTrue(waypoints, f"expected a route to {stop}")
+            for end in waypoints:
+                if start[1] == end[1]:
+                    crosses = (
+                        y_min <= start[1] <= y_max
+                        and min(start[0], end[0]) <= x_max
+                        and max(start[0], end[0]) >= x_min
+                    )
+                elif start[0] == end[0]:
+                    crosses = (
+                        x_min <= start[0] <= x_max
+                        and min(start[1], end[1]) <= y_max
+                        and max(start[1], end[1]) >= y_min
+                    )
+                else:
+                    self.fail(f"diagonal shortcut from {start} to {end}")
+                self.assertFalse(crosses, f"segment {start} to {end} crosses {obstacle}")
+                start = end
+
+    def test_plan_detours_around_thin_obstacle_between_grid_points(self):
+        cases = [
+            ((0, 2, 0, 1), (2.0, 0.0), (0.45, -0.05, 0.55, 0.05)),
+            ((0, 1, 0, 2), (0.0, 2.0), (-0.05, 0.45, 0.05, 0.55)),
+        ]
+        for area, target, obstacle in cases:
+            with self.subTest(target=target):
+                with patch.multiple(
+                    mission, AREA=area, CELL=1, CLEARANCE=0.1, HOME=(0.0, 0.0)
+                ):
+                    legs = mission.plan([target], [obstacle])
+                    self.assertEqual([stop for stop, _ in legs], [target, (0.0, 0.0)])
+                    self.assert_route_avoids_rectangle(legs, (0.0, 0.0), obstacle)
+
+    def test_plan_reports_no_path_when_thin_barrier_spans_the_map(self):
+        barrier = (0.45, -0.1, 0.55, 1.1)
+        with patch.multiple(
+            mission, AREA=(0, 2, 0, 1), CELL=1, CLEARANCE=0.1, HOME=(0.0, 0.0)
+        ):
+            with self.assertRaisesRegex(SystemExit, "No path"):
+                mission.plan([(2.0, 0.0)], [barrier])
 
 
 class CornerReductionTests(unittest.TestCase):
