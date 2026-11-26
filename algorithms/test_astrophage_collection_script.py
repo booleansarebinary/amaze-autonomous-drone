@@ -129,6 +129,33 @@ class GridConfigurationTests(unittest.TestCase):
             search.assert_not_called()
 
 
+class ObstacleConfigurationTests(unittest.TestCase):
+    def test_plan_rejects_reversed_or_flat_obstacle_rectangles_before_search(self):
+        rectangles = [
+            (1.0, 0.0, 0.5, 0.5),
+            (0.0, 1.0, 0.5, 0.5),
+            (0.5, 0.0, 0.5, 0.5),
+            (0.0, 0.5, 0.5, 0.5),
+        ]
+        for obstacle in rectangles:
+            with self.subTest(obstacle=obstacle):
+                with patch.object(mission, "HOME", (0.0, 0.0)):
+                    with patch.object(mission, "astar") as search:
+                        with self.assertRaisesRegex(ValueError, "obstacle.*bounds"):
+                            mission.plan([], [obstacle])
+                        search.assert_not_called()
+
+    def test_plan_rejects_nonfinite_obstacle_bounds_before_search(self):
+        for bad_bound in (float("nan"), float("inf"), -float("inf")):
+            obstacle = (0.5, 0.5, bad_bound, 1.0)
+            with self.subTest(obstacle=obstacle):
+                with patch.object(mission, "HOME", (0.0, 0.0)):
+                    with patch.object(mission, "astar") as search:
+                        with self.assertRaisesRegex(ValueError, "obstacle.*finite"):
+                            mission.plan([], [obstacle])
+                        search.assert_not_called()
+
+
 class PointClearanceTests(unittest.TestCase):
     def setUp(self):
         settings = patch.multiple(mission, AREA=(0, 4, 0, 3), CELL=0.25, CLEARANCE=0.375)
@@ -191,6 +218,42 @@ class GridPointSearchTests(unittest.TestCase):
     def test_same_valid_start_and_goal_returns_one_point(self):
         route = mission.astar((1, 1), (1, 1), [])
         self.assert_valid_route(route, (1, 1), (1, 1), set(), steps=0)
+
+
+class MapEdgeRouteTests(unittest.TestCase):
+    def assert_inside_area(self, point, area):
+        x, y = point
+        self.assertTrue(
+            area[0] <= x <= area[1] and area[2] <= y <= area[3],
+            f"waypoint {point} lies outside AREA {area}",
+        )
+
+    def test_astar_does_not_detour_beyond_either_map_edge(self):
+        # A short detour outside the map must not beat a longer legal detour.
+        cases = [
+            ((0, 0.26, 0, 0.2), (0.09, 0.09, 0.21, 0.11), (2, 0), (2, 2)),
+            ((0, 0.2, 0, 0.26), (0.09, 0.09, 0.11, 0.21), (0, 2), (2, 2)),
+        ]
+        for area, obstacle, start, goal in cases:
+            with self.subTest(area=area):
+                with patch.multiple(mission, AREA=area, CELL=0.1, CLEARANCE=0.02):
+                    route = mission.astar(start, goal, [obstacle])
+                    self.assertIsNotNone(route)
+                    self.assertEqual((route[0], route[-1]), (start, goal))
+                    for cell in route:
+                        self.assert_inside_area(mission.to_meters(cell), area)
+
+    def test_complete_plan_does_not_export_outside_waypoints(self):
+        area = (0, 0.26, 0, 0.2)
+        obstacle = (0.09, 0.09, 0.21, 0.11)
+        with patch.multiple(
+            mission, AREA=area, CELL=0.1, CLEARANCE=0.02, HOME=(0.2, 0.0)
+        ):
+            legs = mission.plan([(0.2, 0.2)], [obstacle])
+            self.assertEqual([stop for stop, _ in legs], [(0.2, 0.2), (0.2, 0.0)])
+            for _, waypoints in legs:
+                for point in waypoints:
+                    self.assert_inside_area(point, area)
 
 
 class CornerReductionTests(unittest.TestCase):

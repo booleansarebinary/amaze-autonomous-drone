@@ -453,9 +453,29 @@ grid points.
 
 ## Remaining work and next review
 
-Next proposed chunk: define and test legal grid points when an `AREA` edge falls
-between grid points, so search cannot select a point beyond the map bound.
-No next chunk has started.
+**Known map-edge issue (test-only check, unresolved):** When `AREA` ends at
+0.26 m and `CELL` is 0.10 m, `astar()` can choose a grid point at about
+0.30 m, outside the configured area. The separate tests check both axes and
+the waypoints exported by `plan()`. On the unchanged mission script, 2 new
+test methods fail in 3 cases; the previous 33 tests still pass. No script fix,
+hardware check, commit or push was made for this finding.
+
+**Next test-only check:** malformed obstacle rectangles. The separate test file
+now checks reversed, flat and nonfinite bounds. On the unchanged script,
+2 new test methods fail in 7 cases because `plan()` does not reject these
+rectangles before search. This is a missing validation check, not flight
+evidence. The mission script has not been changed; implementation needs a
+separate review under the current instruction to leave main working files alone.
+The focused command
+`& C:\Users\victo\amaze-test-flight\.venv\Scripts\python.exe -B -m unittest algorithms.test_astrophage_collection_script.ObstacleConfigurationTests -v`
+ran 2 tests and failed in those 7 cases. The full command with
+`algorithms.test_astrophage_collection_script -v` ran 37 tests: the earlier
+33 passed, and the 4 new methods failed in 10 cases total. No mutation or
+hardware checks ran. Both the test file and this note remain uncommitted.
+
+**Plain-language recap:** A route can leave the map near an edge between grid
+points, and badly defined obstacles can pass through planning without a clear
+error. Tests now show both problems; neither has been fixed yet.
 
 Then make small reviewed changes for input/snapping validation, continuous
 segments and a measured clearance budget. Telemetry must establish coherent,
